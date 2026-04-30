@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="dialecticaGradient" x1="0%" x2="100%" y1="0%" y2="100%">
+      <stop offset="0%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#d97706"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="32" fill="#131a22"/>
+  <rect x="14" y="14" width="100" height="100" rx="28" fill="url(#dialecticaGradient)" opacity="0.22"/>
+  <path d="M40 28h25c19 0 31 11 31 30 0 18-12 30-31 30H40V28Zm22 48c11 0 18-6 18-18s-7-18-18-18H54v36h8Z" fill="#fff8f1"/>
+</svg>
