@@ -530,7 +530,7 @@ export function createDefaultSettings(locale: AppLocale = "zh-CN"): AppSettings 
     about: {
       projectName: "Dialectica",
       version: "0.5.0",
-      repositoryUrl: "",
+      repositoryUrl: "https://github.com/oukesty/Dialectica",
       license: "MIT",
     },
   };
