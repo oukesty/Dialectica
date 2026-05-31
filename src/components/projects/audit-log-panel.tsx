@@ -25,10 +25,10 @@ export function AuditLogPanel({ projectId, locale }: { projectId: string; locale
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  const readErrorMessage = async (response: Response) => {
+  const readErrorMessage = useCallback(async (response: Response) => {
     const payload = await response.json().catch(() => null) as { error?: string } | null;
     return payload?.error ?? t("project.auditLoadFailed");
-  };
+  }, [t]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -44,7 +44,7 @@ export function AuditLogPanel({ projectId, locale }: { projectId: string; locale
       setLoadError(error instanceof Error ? error.message : t("project.auditLoadFailed"));
     }
     finally { setLoading(false); }
-  }, [projectId, t]);
+  }, [projectId, readErrorMessage, t]);
 
   useEffect(() => { void load(); }, [load]);
 

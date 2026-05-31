@@ -1103,7 +1103,7 @@ export function AssistantWorkspace({
                     <div className="rounded-xl border border-dashed border-[color:var(--border)] px-4 py-4 text-sm leading-6 text-[color:var(--muted)]">
                       {t("assistant.emptyHistory")}
                     </div>
-                  ) : activeSessions.map((session, sessionIdx) => {
+                  ) : activeSessions.map((session) => {
                     const providerId = (session.providerId ?? "mock") as ProviderId;
                     const isBusy = sessionBusyId === session.id;
                     const isDeleting = pendingDeleteId === session.id;

@@ -5,7 +5,9 @@ import { FileUp } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useI18n } from "@/components/providers/i18n-provider";
 import { Button } from "@/components/ui/primitives";
-import type { AppLocale } from "@/lib/types";
+import type { AppLocale, ImportResult } from "@/lib/types";
+
+const IMPORT_RESULT_STORAGE_PREFIX = "dialectica:import-result:";
 
 function detectFormat(fileName: string) {
   if (fileName.endsWith(".json")) return "json";
@@ -60,10 +62,21 @@ export function DashboardImportButton({
               });
 
               if (!response.ok) {
-                throw new Error(t("errors.importFailed"));
+                const payload = await response.json().catch(() => null) as { error?: string } | null;
+                throw new Error(payload?.error ?? t("errors.importFailed"));
               }
 
-              const data = (await response.json()) as { project: { id: string } };
+              const data = (await response.json()) as ImportResult;
+              try {
+                window.sessionStorage.setItem(`${IMPORT_RESULT_STORAGE_PREFIX}${data.project.id}`, JSON.stringify({
+                  warningCount: data.warnings.length,
+                  warnings: data.warnings.slice(0, 3),
+                  entryCount: data.project.entries.length,
+                  participantCount: data.project.participants.length,
+                }));
+              } catch {
+                // Import should still route to the created project if the browser blocks session storage.
+              }
               router.push(`/${locale}/projects/${data.project.id}`);
             } catch (caught) {
               setError(caught instanceof Error ? caught.message : t("errors.importFailed"));

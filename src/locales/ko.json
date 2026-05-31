@@ -21,7 +21,7 @@
     "clearAll": "모두 지우기",
     "clickToOpen": "클릭하여 열기",
     "notificationDoNotDisturb": "방해 금지",
-    "notificationDoNotDisturbHint": "알림은 계속 여기에 표시되지만, 읽지 않음 배지는 더 이상 강조되지 않습니다."
+    "notificationDoNotDisturbHint": "켜져 있는 동안 새 로컬 알림 저장과 표시를 일시 중지합니다."
   },
   "common": {
     "create": "생성",
@@ -832,9 +832,10 @@
     "keyboardShortcuts": "키보드 단축키",
     "clickToChange": "키를 클릭한 다음 새 단축키를 누르세요.",
     "restoreDefaults": "기본값 복원",
-    "emailNotifications": "로컬 모의 이메일 알림",
-    "emailNotificationsHint": "이메일로 알릴 만한 중요한 이벤트를 로컬 알림으로 기록합니다. 현재 로컬 빌드에서는 실제 이메일을 보내지 않습니다.",
-    "emailEnabled": "모의 이메일 알림 기록 활성화",
+    "emailNotifications": "이메일 알림 Provider",
+    "emailNotificationsHint": "외부 이메일 Provider가 설정되어 있지 않습니다. 이메일성 이벤트는 로컬 알림으로만 기록됩니다.",
+    "emailEnabled": "이메일성 이벤트를 로컬 알림으로 기록",
+    "externalEmailProviderNotConfigured": "외부 이메일 Provider 미설정",
     "emailAddress": "알림 이메일 주소",
     "onNewMember": "새 회원이 가입하면 알림",
     "onAiSummary": "AI가 요약을 완료하면 알림",

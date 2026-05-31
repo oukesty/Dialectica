@@ -21,7 +21,7 @@
     "clearAll": "Tout supprimer",
     "clickToOpen": "Cliquer pour ouvrir",
     "notificationDoNotDisturb": "Ne pas déranger",
-    "notificationDoNotDisturbHint": "Les notifications restent dans la liste, mais le badge rouge ne s’affiche plus."
+    "notificationDoNotDisturbHint": "Les nouvelles notifications locales sont suspendues tant que cette option est active."
   },
   "common": {
     "create": "Créer",
@@ -832,9 +832,10 @@
     "keyboardShortcuts": "Raccourcis clavier",
     "clickToChange": "Cliquez sur une touche puis appuyez sur le nouveau raccourci",
     "restoreDefaults": "Restaurer les valeurs par defaut",
-    "emailNotifications": "Notifications e-mail simulees locales",
-    "emailNotificationsHint": "Enregistre des notifications locales pour les evenements qui meriteraient un e-mail. Cette version locale n'envoie pas de vrais e-mails.",
-    "emailEnabled": "Activer les enregistrements d'e-mails simules",
+    "emailNotifications": "Provider de notification e-mail",
+    "emailNotificationsHint": "Aucun Provider e-mail externe n'est configure. Les evenements de type e-mail sont seulement enregistres comme notifications locales.",
+    "emailEnabled": "Enregistrer les evenements e-mail comme notifications locales",
+    "externalEmailProviderNotConfigured": "Provider e-mail externe non configure",
     "emailAddress": "Adresse e-mail de notification",
     "onNewMember": "Notifier quand un nouveau membre rejoint",
     "onAiSummary": "Notifier quand l'IA termine un resume",

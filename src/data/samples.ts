@@ -3897,9 +3897,11 @@ export function getBundledSampleKnowledgeProject(projectId: DiscussionProject["i
 }
 
 export function getBundledSampleCollaborationState(
-  _projectId: DiscussionProject["id"],
-  _locale: AppLocale,
+  projectId: DiscussionProject["id"],
+  locale: AppLocale,
 ): CollaborationState | null {
+  void projectId;
+  void locale;
   return null;
 }
 

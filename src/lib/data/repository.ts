@@ -631,9 +631,6 @@ function normalizeSettings(raw: unknown): AppSettings {
         input.knowledgePreferences?.graphOutputLanguage === "auto" || isLocale(input.knowledgePreferences?.graphOutputLanguage)
           ? input.knowledgePreferences?.graphOutputLanguage
           : defaults.knowledgePreferences.graphOutputLanguage,
-      autoExtractOnSave: false,
-      autoExtractAfterAiTask: false,
-      autoGenerateGraphLinks: false,
     },
     aiPreferences: sanitizeAiPreferences(input.aiPreferences, defaults.aiPreferences),
     uploadPreferences: {
@@ -905,7 +902,7 @@ function applyCreationDefaults(project: DiscussionProject, settings: AppSettings
   const goal = project.goal || createDefaultGoal(locale, project.scenario);
   const participants = [...project.participants];
   const isSingleUserAiWorkspace = project.scenario === "ai-dialogue" && participants.length <= 1;
-  const defaultAutomationMode: "basic" = "basic";
+  const defaultAutomationMode = "basic" as const;
   const defaultSummaryThreshold = isSingleUserAiWorkspace
     ? settings.discussionPreferences.singleUserAutoSummaryThreshold
     : settings.discussionPreferences.multiUserAutoSummaryThreshold;

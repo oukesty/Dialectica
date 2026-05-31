@@ -343,7 +343,9 @@ export function NewProjectForm({
 
         <div className="flex flex-wrap gap-3">
           <Button
+            disabled={saving}
             onClick={() => {
+              if (saving) return;
               setSaving(true);
               setError(null);
               startTransition(async () => {

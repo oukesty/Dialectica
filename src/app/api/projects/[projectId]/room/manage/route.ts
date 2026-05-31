@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
 import { getProject, getSettings, upsertProject } from "@/lib/data/repository";
+import { recordEmailNotificationAttempt } from "@/lib/email-notifications";
 import { getProjectAccessState, canRemoveParticipant } from "@/lib/project-access";
 import { appendAuditLog } from "@/lib/audit";
 import { appendNotification } from "@/lib/notifications";
@@ -236,23 +237,22 @@ export async function POST(
       }
       void appendAuditLog({ action: "room.archive", actorId: settings.profile.localIdentityId, actorName: settings.profile.displayName, projectId, details: "Archived room" });
       if (settings.emailNotifications?.enabled && settings.emailNotifications?.onRoomArchived) {
-        void appendNotification(settings.profile.localIdentityId, {
-          type: "email_trigger",
+        void recordEmailNotificationAttempt(settings.profile.localIdentityId, settings, {
           title: localize(project.language, {
-            "zh-CN": "本地模拟邮件通知：房间归档",
-            en: "Local simulated email notification: room archived",
-            ja: "ローカル模擬メール通知：ルームをアーカイブ",
-            ko: "로컬 모의 이메일 알림: 방 보관",
-            fr: "Notification e-mail simulee locale : salon archive",
-            ru: "Локальное имитированное email-уведомление: комната архивирована",
+            "zh-CN": "邮件通知未发送：房间归档",
+            en: "Email notification not sent: room archived",
+            ja: "メール通知は未送信：ルームをアーカイブ",
+            ko: "이메일 알림 미전송: 방 보관",
+            fr: "Notification e-mail non envoyee : salon archive",
+            ru: "Email-уведомление не отправлено: комната архивирована",
           }),
           body: localize(project.language, {
-            "zh-CN": `已记录一条本地模拟通知，不会真实发送邮件到 ${settings.emailNotifications.emailAddress}。房间「${project.title}」已归档。`,
-            en: `A local simulated notification was recorded; no real email was sent to ${settings.emailNotifications.emailAddress}. Room "${project.title}" was archived.`,
-            ja: `${settings.emailNotifications.emailAddress} へ実際のメールは送信されません。ローカルの模擬通知として記録しました。ルーム「${project.title}」をアーカイブしました。`,
-            ko: `${settings.emailNotifications.emailAddress}로 실제 이메일을 보내지 않고 로컬 모의 알림만 기록했습니다. "${project.title}" 방이 보관되었습니다.`,
-            fr: `Une notification simulee locale a ete enregistree ; aucun e-mail reel n'a ete envoye a ${settings.emailNotifications.emailAddress}. Le salon « ${project.title} » a ete archive.`,
-            ru: `Записано локальное имитированное уведомление; реальное письмо на ${settings.emailNotifications.emailAddress} не отправлялось. Комната "${project.title}" архивирована.`,
+            "zh-CN": `房间「${project.title}」已归档。当前未配置外部邮件 Provider，因此不会向 ${settings.emailNotifications.emailAddress || "收件人"} 发送真实邮件。`,
+            en: `Room "${project.title}" was archived. No external email provider is configured, so no real email was sent to ${settings.emailNotifications.emailAddress || "the recipient"}.`,
+            ja: `ルーム「${project.title}」をアーカイブしました。外部メール Provider が未設定のため、${settings.emailNotifications.emailAddress || "受信者"} へ実際のメールは送信されません。`,
+            ko: `"${project.title}" 방이 보관되었습니다. 외부 이메일 Provider가 설정되어 있지 않아 ${settings.emailNotifications.emailAddress || "수신자"}에게 실제 이메일은 전송되지 않았습니다.`,
+            fr: `Le salon « ${project.title} » a ete archive. Aucun Provider e-mail externe n'est configure ; aucun e-mail reel n'a ete envoye a ${settings.emailNotifications.emailAddress || "le destinataire"}.`,
+            ru: `Комната "${project.title}" архивирована. Внешний email-провайдер не настроен, поэтому настоящее письмо на ${settings.emailNotifications.emailAddress || "адрес получателя"} не отправлялось.`,
           }),
           projectId,
         });

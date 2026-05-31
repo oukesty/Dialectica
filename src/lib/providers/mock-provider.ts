@@ -137,6 +137,62 @@ function buildMockConversationReply(locale: AnalysisContext["locale"], prompt: s
   return `${trimmedPrompt ? `I’ll continue from “${trimmedPrompt.slice(0, 120)}.” ` : "I’ll continue the current conversation. "}This is a local mock reply, so I’m prioritizing context framing, missing evidence, and a practical next step.${attachmentNote ? `\n\nAttachment excerpt: ${attachmentNote}` : ""}${latestAssistant ? `\n\nPrevious AI reply: ${latestAssistant.slice(0, 160)}` : ""}`;
 }
 
+function extractMockGraphConversation(prompt: string) {
+  const jsonConversation = prompt.match(/"conversation":"([\s\S]*?)"\s*}/);
+  if (jsonConversation?.[1]) {
+    return jsonConversation[1].replace(/\\n/g, "\n").replace(/\\"/g, "\"");
+  }
+  const plainConversation = prompt.match(/Conversation:\s*([\s\S]*?)\n\s*\{/i);
+  return plainConversation?.[1]?.trim() ?? prompt;
+}
+
+function compactMockGraphLabel(text: string, fallback: string) {
+  const cleaned = text
+    .replace(/\[[^\]]+\]:/g, "")
+    .replace(/[{}[\]"`]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!cleaned) return fallback;
+  const words = cleaned.split(/\s+/).slice(0, 7).join(" ");
+  return words.replace(/[.,;:!?。！？]+$/g, "") || fallback;
+}
+
+function buildMockKnowledgeGraphReply(prompt: string) {
+  const conversation = extractMockGraphConversation(prompt);
+  const sentences = conversation
+    .split(/(?<=[.!?。！？])\s+|\n+/)
+    .map((item) => item.replace(/\[[^\]]+\]:/g, "").trim())
+    .filter((item) => item.length >= 16);
+  const first = sentences[0] ?? conversation.slice(0, 220);
+  const second = sentences.find((item) => item !== first) ?? first;
+  return JSON.stringify({
+    nodes: [
+      {
+        id: "n1",
+        label: compactMockGraphLabel(first, "Primary discussion evidence"),
+        type: "evidence",
+        description: first.slice(0, 260),
+      },
+      {
+        id: "n2",
+        label: compactMockGraphLabel(second, "Follow-up decision requirement"),
+        type: "recommendation",
+        description: second === first
+          ? `Confirm the decision path implied by: ${first.slice(0, 220)}`
+          : second.slice(0, 260),
+      },
+    ],
+    relations: [
+      {
+        source: "n1",
+        target: "n2",
+        label: "source evidence informs the next decision",
+        type: "supports",
+      },
+    ],
+  });
+}
+
 export const mockProvider: AiProvider = {
   descriptor,
   async testConnection() {
@@ -223,6 +279,9 @@ export const mockProvider: AiProvider = {
     );
   },
   async respondInConversation(_project, context, options): Promise<ProviderConversationResult> {
+    const reply = context.goal === "Return JSON knowledge graph"
+      ? buildMockKnowledgeGraphReply(options.prompt)
+      : buildMockConversationReply(context.locale, options.prompt, options.history, context.attachmentContext?.items.find((item) => item.previewText)?.previewText);
     return {
       ok: true,
       providerId: "mock",
@@ -236,7 +295,7 @@ export const mockProvider: AiProvider = {
         fr: "Le fournisseur mock a renvoyé une réponse de conversation locale.",
         ru: "Mock-провайдер вернул локальный ответ в диалоге.",
       }),
-      reply: buildMockConversationReply(context.locale, options.prompt, options.history, context.attachmentContext?.items.find((item) => item.previewText)?.previewText),
+      reply,
     };
   },
   async streamConversation(_project, context, options) {

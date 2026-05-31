@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic";
 import { AssistantConversationError, finalizeAssistantConversation, prepareAssistantConversation } from "@/lib/ai/assistant-conversation";
 import { resolveAutoTriggeredTasks } from "@/lib/ai/summary-automation";
 import { getProvider } from "@/lib/providers/registry";
-import { ProviderConversationResult, ProviderConversationStreamChunk } from "@/lib/types";
+import { ProviderConversationResult } from "@/lib/types";
 
 function encodeSse(value: Record<string, unknown>) {
   return `data: ${JSON.stringify(value)}\n\n`;

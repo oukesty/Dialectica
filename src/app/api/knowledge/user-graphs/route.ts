@@ -157,29 +157,32 @@ export async function POST(request: Request) {
     href: `/${interfaceLocale}/knowledge/graph?graphId=${graph.id}&projectIds=${sourceProjectIds.join(",")}${sourceProjectIds.length === 1 ? `&projectId=${sourceProjectIds[0]}&scopeMode=project` : "&scopeMode=cross-project"}`,
   });
 
-  // Fire-and-forget: generate graph content in background.
-  void generateUserGraphContent(graph.id, graphLocale, settings).then((result) => {
-    if (result) {
-      void appendNotification(settings.profile.localIdentityId, {
-        type: "ai_summary",
-        title: interfaceLocale === "zh-CN" ? "图谱生成完成" : interfaceLocale === "ja" ? "グラフ生成完了" : interfaceLocale === "ko" ? "그래프 생성 완료" : interfaceLocale === "fr" ? "Graphe genere" : interfaceLocale === "ru" ? "Граф создан" : "Graph generated",
-        body: interfaceLocale === "zh-CN"
-          ? `知识图谱「${title}」已生成完成：${result.stats.nodeCount} 个节点，${result.stats.relationCount} 条关系。`
-          : interfaceLocale === "ja"
-            ? `知識グラフ「${title}」が完成しました：${result.stats.nodeCount} ノード、${result.stats.relationCount} 関係。`
-            : interfaceLocale === "ko"
-              ? `지식 그래프 "${title}" 생성이 완료되었습니다: 노드 ${result.stats.nodeCount}개, 관계 ${result.stats.relationCount}개.`
-            : interfaceLocale === "fr"
-              ? `Le graphe de connaissances « ${title} » est pret : ${result.stats.nodeCount} noeuds, ${result.stats.relationCount} relations.`
-            : interfaceLocale === "ru"
-              ? `Граф знаний "${title}" готов: ${result.stats.nodeCount} узлов, ${result.stats.relationCount} связей.`
-              : `Knowledge graph "${title}" is ready: ${result.stats.nodeCount} nodes, ${result.stats.relationCount} relations.`,
-        href: `/${interfaceLocale}/knowledge/graph?graphId=${graph.id}&projectIds=${sourceProjectIds.join(",")}${sourceProjectIds.length === 1 ? `&projectId=${sourceProjectIds[0]}&scopeMode=project` : "&scopeMode=cross-project"}`,
-      });
-    }
-  });
+  const generatedGraph = await generateUserGraphContent(graph.id, graphLocale, settings);
+  const finalGraph = generatedGraph ?? await getUserGraph(graph.id, {
+    identityId: settings.profile.localIdentityId,
+    displayName: settings.profile.displayName,
+  }, graphLocale) ?? graph;
 
-  return NextResponse.json({ graph }, { status: 201 });
+  if (generatedGraph) {
+    void appendNotification(settings.profile.localIdentityId, {
+      type: "ai_summary",
+      title: interfaceLocale === "zh-CN" ? "图谱生成完成" : interfaceLocale === "ja" ? "グラフ生成完了" : interfaceLocale === "ko" ? "그래프 생성 완료" : interfaceLocale === "fr" ? "Graphe genere" : interfaceLocale === "ru" ? "Граф создан" : "Graph generated",
+      body: interfaceLocale === "zh-CN"
+        ? `知识图谱「${title}」已生成完成：${generatedGraph.stats.nodeCount} 个节点，${generatedGraph.stats.relationCount} 条关系。`
+        : interfaceLocale === "ja"
+          ? `知識グラフ「${title}」が完成しました：${generatedGraph.stats.nodeCount} ノード、${generatedGraph.stats.relationCount} 関係。`
+          : interfaceLocale === "ko"
+            ? `지식 그래프 "${title}" 생성이 완료되었습니다: 노드 ${generatedGraph.stats.nodeCount}개, 관계 ${generatedGraph.stats.relationCount}개.`
+          : interfaceLocale === "fr"
+            ? `Le graphe de connaissances « ${title} » est pret : ${generatedGraph.stats.nodeCount} noeuds, ${generatedGraph.stats.relationCount} relations.`
+          : interfaceLocale === "ru"
+            ? `Граф знаний "${title}" готов: ${generatedGraph.stats.nodeCount} узлов, ${generatedGraph.stats.relationCount} связей.`
+            : `Knowledge graph "${title}" is ready: ${generatedGraph.stats.nodeCount} nodes, ${generatedGraph.stats.relationCount} relations.`,
+      href: `/${interfaceLocale}/knowledge/graph?graphId=${graph.id}&projectIds=${sourceProjectIds.join(",")}${sourceProjectIds.length === 1 ? `&projectId=${sourceProjectIds[0]}&scopeMode=project` : "&scopeMode=cross-project"}`,
+    });
+  }
+
+  return NextResponse.json({ graph: finalGraph }, { status: 201 });
 }
 
 export async function DELETE(request: Request) {

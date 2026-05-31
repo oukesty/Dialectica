@@ -52,8 +52,17 @@ import { normalizeParticipantRoster, updateParticipantRoster } from "@/lib/parti
 import { deepEqual, isPlainObject } from "@/lib/deep-patch";
 
 type WorkspaceTab = AppSettings["discussionPreferences"]["defaultWorkspaceTab"];
+type WorkspaceMessageTone = "default" | "success" | "danger";
 
 const workspaceTabs = ["capture", "overview", "structure", "insights", "knowledge", "settings"] as const;
+const IMPORT_RESULT_STORAGE_PREFIX = "dialectica:import-result:";
+
+type ImportResultNotice = {
+  warningCount?: number;
+  warnings?: string[];
+  entryCount?: number;
+  participantCount?: number;
+};
 
 function parseTags(input: string) {
   return input.split(",").map((tag) => tag.trim()).filter(Boolean);
@@ -186,6 +195,7 @@ export function ProjectWorkspace({
   const [captureSubmitting, setCaptureSubmitting] = useState(false);
   const [roomNotesSaving, setRoomNotesSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [messageTone, setMessageTone] = useState<WorkspaceMessageTone>("default");
   const [templateSaving, setTemplateSaving] = useState(false);
   const [templateDraftName, setTemplateDraftName] = useState(initialProject.title);
   const [templateDraftDescription, setTemplateDraftDescription] = useState(initialProject.description);
@@ -355,15 +365,66 @@ export function ProjectWorkspace({
   }, [access.messageParticipants, entryDraft.participantId]);
   const workspaceEditingDisabled = !access.canEditWorkspace;
   const workspaceMutationLocked = sampleReadOnlyLocked || !mutationAccess.canEditWorkspace;
+  const showWorkspaceMessage = (nextMessage: string | null, tone: WorkspaceMessageTone = "default") => {
+    setMessage(nextMessage);
+    setMessageTone(tone);
+  };
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const storageKey = `${IMPORT_RESULT_STORAGE_PREFIX}${project.id}`;
+    let rawNotice: string | null;
+    try {
+      rawNotice = window.sessionStorage.getItem(storageKey);
+      if (rawNotice) {
+        window.sessionStorage.removeItem(storageKey);
+      }
+    } catch {
+      return;
+    }
+    if (!rawNotice) return;
+    let notice: ImportResultNotice;
+    try {
+      notice = JSON.parse(rawNotice) as ImportResultNotice;
+    } catch {
+      return;
+    }
+    const warningCount = notice.warningCount ?? notice.warnings?.length ?? 0;
+    const warningPreview = (notice.warnings ?? [])
+      .slice(0, 2)
+      .map((warning) => warning.length > 120 ? `${warning.slice(0, 117)}...` : warning);
+    const summary = [
+      t("importExport.done"),
+      `${t("project.overviewCard.entries")}: ${notice.entryCount ?? project.entries.length}`,
+      `${t("project.overviewCard.participants")}: ${notice.participantCount ?? project.participants.length}`,
+      warningCount > 0 ? `${t("importExport.warnings")}: ${warningCount}` : null,
+      ...warningPreview,
+    ].filter(Boolean).join(" · ");
+    setMessage(summary);
+    setMessageTone(warningCount > 0 ? "default" : "success");
+  }, [project.entries.length, project.id, project.participants.length, t]);
+  const runKnowledgeExtraction = useCallback(async () => {
+    if (sampleReadOnlyLocked || project.metadata.isSample) return;
+    const response = await fetch(`/api/projects/${project.id}/knowledge?locale=${locale}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        generateGraphLinks: settings.knowledgePreferences.autoGenerateGraphLinks,
+      }),
+    });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null) as { error?: string } | null;
+      throw new Error(payload?.error ?? t("errors.unexpected"));
+    }
+  }, [locale, project.id, project.metadata.isSample, sampleReadOnlyLocked, settings.knowledgePreferences.autoGenerateGraphLinks, t]);
 
   const patchProject = (next: DiscussionProject) => {
     if (workspaceMutationLocked) {
-      setMessage(sampleReadOnlyLocked ? sampleMutationMessage : t("project.workspaceReadOnly"));
+      showWorkspaceMessage(sampleReadOnlyLocked ? sampleMutationMessage : t("project.workspaceReadOnly"), "danger");
       return;
     }
     setProject(next);
     setDirty(true);
-    setMessage(null);
+    showWorkspaceMessage(null);
   };
 
   const withParticipants = (participants: Participant[]) => {
@@ -377,25 +438,28 @@ export function ProjectWorkspace({
 
   const persistProjectState = (nextProject: DiscussionProject, successMessage = t("project.saveMessage")) => {
     if (workspaceMutationLocked) {
-      setMessage(sampleReadOnlyLocked ? sampleMutationMessage : t("project.workspaceReadOnly"));
+      showWorkspaceMessage(sampleReadOnlyLocked ? sampleMutationMessage : t("project.workspaceReadOnly"), "danger");
       return;
     }
     setSaving(true);
-    setMessage(null);
+    showWorkspaceMessage(null);
     startTransition(async () => {
       try {
         const saved = await saveProjectChanges(savedProject, nextProject, { locale });
         setProject(saved);
         setSavedProject(saved);
         setDirty(false);
-        setMessage(successMessage);
+        showWorkspaceMessage(successMessage, "success");
+        if (settings.knowledgePreferences.autoExtractOnSave) {
+          await runKnowledgeExtraction();
+        }
       } catch (caught) {
         if (caught instanceof ProjectConflictError && caught.currentProject) {
           setProject(caught.currentProject);
           setSavedProject(caught.currentProject);
           setDirty(false);
         }
-        setMessage(caught instanceof Error ? caught.message : t("errors.saveFailed"));
+        showWorkspaceMessage(caught instanceof Error ? caught.message : t("errors.saveFailed"), "danger");
       } finally {
         setSaving(false);
       }
@@ -431,19 +495,19 @@ export function ProjectWorkspace({
         setSavedProject(caught.currentProject);
         setDirty(false);
       }
-      setMessage(caught instanceof Error ? caught.message : t("errors.saveFailed"));
+      showWorkspaceMessage(caught instanceof Error ? caught.message : t("errors.saveFailed"), "danger");
     } finally {
       setRoomNotesSaving(false);
     }
-  }, [project, t, workspaceMutationLocked]);
+  }, [locale, project, t, workspaceMutationLocked]);
 
   const removeParticipant = (participantId: string) => {
     if (protectedSample) {
-      setMessage(t("project.sampleProtected"));
+      showWorkspaceMessage(t("project.sampleProtected"), "danger");
       return;
     }
     if (project.participants.length <= 1) {
-      setMessage(t("project.participantsCard.keepOne"));
+      showWorkspaceMessage(t("project.participantsCard.keepOne"), "danger");
       return;
     }
 
@@ -463,7 +527,7 @@ export function ProjectWorkspace({
 
     const ownsTimelineEntries = project.entries.some((entry) => entry.participantId === participantId || entry.ownerParticipantId === participantId);
     if (ownsTimelineEntries) {
-      setMessage(t("project.participantsCard.timelineLocked"));
+      showWorkspaceMessage(t("project.participantsCard.timelineLocked"), "danger");
       return;
     }
 
@@ -478,21 +542,22 @@ export function ProjectWorkspace({
 
   const submitCaptureEntries = () => {
     if (sampleReadOnlyLocked) {
-      setMessage(sampleMutationMessage);
+      showWorkspaceMessage(sampleMutationMessage, "danger");
       return;
     }
     if (!mutationAccess.canPostMessages) {
-      setMessage(mutationAccess.canJoinPublicRoom ? t("project.captureCard.joinBeforeCapture") : t("project.captureCard.captureLocked"));
+      showWorkspaceMessage(mutationAccess.canJoinPublicRoom ? t("project.captureCard.joinBeforeCapture") : t("project.captureCard.captureLocked"), "danger");
       return;
     }
     if (!entryDraft.participantId || !entryDraft.content.trim()) return;
     const parts = entryDraft.split ? splitParagraphs(entryDraft.content) : [entryDraft.content.trim()];
     const tags = parseTags(entryDraft.tags);
     setCaptureSubmitting(true);
-    setMessage(null);
+    showWorkspaceMessage(null);
     startTransition(async () => {
       try {
         let nextProject = project;
+        let persistedProject: DiscussionProject | null = null;
         for (const [index, content] of parts.entries()) {
           const occurredAt = new Date(new Date(entryDraft.occurredAt).getTime() + index * 60_000).toISOString();
           const response = await fetch(`/api/projects/${project.id}/events?locale=${locale}`, {
@@ -512,11 +577,19 @@ export function ProjectWorkspace({
           const payload = await response.json().catch(() => null);
           if (!response.ok) throw new Error(payload?.error ?? t("errors.unexpected"));
           if (payload?.project) {
+            persistedProject = payload.project;
             nextProject = payload.project;
           }
         }
-        setProject(nextProject);
-        setDirty(false);
+        if (!persistedProject) {
+          throw new Error(t("errors.unexpected"));
+        }
+        const mergedProject = dirty
+          ? mergeIncomingProjectState(savedProjectRef.current, project, persistedProject)
+          : nextProject;
+        setProject(mergedProject);
+        setSavedProject(persistedProject);
+        setDirty(!deepEqual(mergedProject, persistedProject));
         setEntryDraft({
           participantId: entryDraft.participantId,
           occurredAt: toLocalInput(new Date().toISOString()),
@@ -526,9 +599,9 @@ export function ProjectWorkspace({
           highlighted: false,
           split: true,
         });
-        setMessage(t("project.captureCard.recorded"));
+        showWorkspaceMessage(t("project.captureCard.recorded"), "success");
       } catch (caught) {
-        setMessage(caught instanceof Error ? caught.message : t("errors.unexpected"));
+        showWorkspaceMessage(caught instanceof Error ? caught.message : t("errors.unexpected"), "danger");
       } finally {
         setCaptureSubmitting(false);
       }
@@ -548,7 +621,7 @@ export function ProjectWorkspace({
   }), [kindFilter, normalizedSearch, participantsById, project.entries, speakerFilter]);
   const saveProject = () => {
     if (workspaceMutationLocked) {
-      setMessage(sampleReadOnlyLocked ? sampleMutationMessage : t("project.workspaceReadOnly"));
+      showWorkspaceMessage(sampleReadOnlyLocked ? sampleMutationMessage : t("project.workspaceReadOnly"), "danger");
       return;
     }
     persistProjectState(project, t("project.saveMessage"));
@@ -556,15 +629,15 @@ export function ProjectWorkspace({
 
   const saveCurrentProjectAsTemplate = () => {
     if (sampleReadOnlyLocked) {
-      setMessage(sampleMutationMessage);
+      showWorkspaceMessage(sampleMutationMessage, "danger");
       return;
     }
     if (!access.canRead) {
-      setMessage(t("project.workspaceReadOnly"));
+      showWorkspaceMessage(t("project.workspaceReadOnly"), "danger");
       return;
     }
     setTemplateSaving(true);
-    setMessage(null);
+    showWorkspaceMessage(null);
     startTransition(async () => {
       try {
         const response = await fetch("/api/project-templates", {
@@ -579,9 +652,9 @@ export function ProjectWorkspace({
         });
         const payload = await response.json().catch(() => null);
         if (!response.ok) throw new Error(payload?.error ?? t("errors.saveFailed"));
-        setMessage(t("project.workspaceSettings.templateSaved"));
+        showWorkspaceMessage(t("project.workspaceSettings.templateSaved"), "success");
       } catch (caught) {
-        setMessage(caught instanceof Error ? caught.message : t("errors.saveFailed"));
+        showWorkspaceMessage(caught instanceof Error ? caught.message : t("errors.saveFailed"), "danger");
       } finally {
         setTemplateSaving(false);
       }
@@ -590,18 +663,18 @@ export function ProjectWorkspace({
 
   const deleteProject = () => {
     if (sampleDeletionLocked) {
-      setMessage(sampleMutationMessage);
+      showWorkspaceMessage(sampleMutationMessage, "danger");
       return;
     }
     if (workspaceMutationLocked) {
-      setMessage(sampleReadOnlyLocked ? sampleMutationMessage : t("project.workspaceReadOnly"));
+      showWorkspaceMessage(sampleReadOnlyLocked ? sampleMutationMessage : t("project.workspaceReadOnly"), "danger");
       return;
     }
     if (!window.confirm(t("project.deleteConfirm"))) {
       return;
     }
     setDeleting(true);
-    setMessage(null);
+    showWorkspaceMessage(null);
     startTransition(async () => {
       try {
         const response = await fetch(`/api/projects/${project.id}?locale=${locale}`, { method: "DELETE" });
@@ -609,7 +682,7 @@ export function ProjectWorkspace({
         if (!response.ok) throw new Error(payload?.error ?? t("errors.deleteFailed"));
         router.push(`/${locale}`);
       } catch (caught) {
-        setMessage(caught instanceof Error ? caught.message : t("errors.deleteFailed"));
+        showWorkspaceMessage(caught instanceof Error ? caught.message : t("errors.deleteFailed"), "danger");
       } finally {
         setDeleting(false);
       }
@@ -618,11 +691,11 @@ export function ProjectWorkspace({
 
   const toggleArchiveState = () => {
     if (sampleReadOnlyLocked || !canManageArchive) {
-      setMessage(sampleReadOnlyLocked ? sampleMutationMessage : t("project.workspaceReadOnly"));
+      showWorkspaceMessage(sampleReadOnlyLocked ? sampleMutationMessage : t("project.workspaceReadOnly"), "danger");
       return;
     }
     setArchiveUpdating(true);
-    setMessage(null);
+    showWorkspaceMessage(null);
     startTransition(async () => {
       try {
         const response = await fetch(`/api/projects/${project.id}/archive`, {
@@ -640,9 +713,9 @@ export function ProjectWorkspace({
         setProject(payload.project);
         setSavedProject(payload.project);
         setDirty(false);
-        setMessage(project.metadata.archivedAt ? `${t("common.restore")} \u2714` : `${t("common.archive")} \u2714`);
+        showWorkspaceMessage(project.metadata.archivedAt ? `${t("common.restore")} \u2714` : `${t("common.archive")} \u2714`, "success");
       } catch (caught) {
-        setMessage(caught instanceof Error ? caught.message : t("errors.saveFailed"));
+        showWorkspaceMessage(caught instanceof Error ? caught.message : t("errors.saveFailed"), "danger");
       } finally {
         setArchiveUpdating(false);
       }
@@ -651,15 +724,15 @@ export function ProjectWorkspace({
 
   const runAiTask = (task: string) => {
     if (sampleReadOnlyLocked) {
-      setMessage(sampleMutationMessage);
+      showWorkspaceMessage(sampleMutationMessage, "danger");
       return;
     }
     if (!mutationAccess.canRunAiTasks) {
-      setMessage(mutationAccess.canJoinPublicRoom ? t("project.collaborationPanel.joinPublicRoom") : t("project.workspaceAiLocked"));
+      showWorkspaceMessage(mutationAccess.canJoinPublicRoom ? t("project.collaborationPanel.joinPublicRoom") : t("project.workspaceAiLocked"), "danger");
       return;
     }
     setTaskBusy(task);
-    setMessage(null);
+    showWorkspaceMessage(null);
     startTransition(async () => {
       try {
         const response = await fetch(`/api/projects/${project.id}/ai`, {
@@ -681,8 +754,16 @@ export function ProjectWorkspace({
         if (!response.ok) throw new Error(payload?.error ?? t("errors.unexpected"));
         if (payload?.project) {
           setProject(payload.project);
+          setSavedProject(payload.project);
           setDirty(false);
         } else if (payload?.analysis) {
+          const nextProject = {
+            ...project,
+            insights: payload.analysis.insights,
+            summary: payload.analysis.summary,
+            providerSnapshot: payload.analysis.providerSnapshot,
+            room: payload.roomAiConfig ? { ...project.room, aiConfig: payload.roomAiConfig } : project.room,
+          };
           setProject((current) => ({
             ...current,
             insights: payload.analysis!.insights,
@@ -690,12 +771,16 @@ export function ProjectWorkspace({
             providerSnapshot: payload.analysis!.providerSnapshot,
             room: payload.roomAiConfig ? { ...current.room, aiConfig: payload.roomAiConfig } : current.room,
           }));
+          setSavedProject(nextProject);
           setDirty(false);
         }
+        if (settings.knowledgePreferences.autoExtractAfterAiTask) {
+          await runKnowledgeExtraction();
+        }
         setActiveTab("insights");
-        setMessage(t("project.workspaceSettings.taskCompleted"));
+        showWorkspaceMessage(t("project.workspaceSettings.taskCompleted"), "success");
       } catch (caught) {
-        setMessage(caught instanceof Error ? caught.message : t("errors.unexpected"));
+        showWorkspaceMessage(caught instanceof Error ? caught.message : t("errors.unexpected"), "danger");
       } finally {
         setTaskBusy(null);
       }
@@ -705,13 +790,13 @@ export function ProjectWorkspace({
   const exportPdf = async () => {
     if (pdfExportBusy) return;
     setPdfExportBusy(true);
-    setMessage(null);
+    showWorkspaceMessage(null);
     try {
       const { exportProjectToPdf } = await import("@/lib/pdf-export");
       await exportProjectToPdf(project, locale);
-      setMessage(t("project.workspaceSettings.exportPdfSuccess"));
+      showWorkspaceMessage(t("project.workspaceSettings.exportPdfSuccess"), "success");
     } catch (caught) {
-      setMessage(caught instanceof Error ? caught.message : t("project.workspaceSettings.exportPdfFailed"));
+      showWorkspaceMessage(caught instanceof Error ? caught.message : t("project.workspaceSettings.exportPdfFailed"), "danger");
     } finally {
       setPdfExportBusy(false);
     }
@@ -748,7 +833,7 @@ export function ProjectWorkspace({
   const canRemoveParticipant = (participant: Participant) => !isCurrentProfileParticipant(participant) && canRemoveParticipantAccess(project, access, participant);
   const syncRoomAiConfiguration = () => {
     if (!canSyncRoomAiConfig) {
-      setMessage(t("project.workspaceSettings.roomAiControllerLocked"));
+      showWorkspaceMessage(t("project.workspaceSettings.roomAiControllerLocked"), "danger");
       return;
     }
 
@@ -812,7 +897,7 @@ export function ProjectWorkspace({
                           setWsModelMenuOpen(false);
                           void patchSettings({ provider: { providers: { [wsProviderId]: { model: m.id } } } }).catch((caught) => {
                             setWsModelOverride(null);
-                            setMessage(caught instanceof Error ? caught.message : t("errors.saveFailed"));
+                            showWorkspaceMessage(caught instanceof Error ? caught.message : t("errors.saveFailed"), "danger");
                           });
                         }} className={`flex w-full items-center gap-2 px-3 py-2 text-left text-xs transition hover:bg-[color:var(--surface-hover)] ${m.id === wsModel ? "font-bold text-[color:var(--brand-solid)]" : "text-[color:var(--foreground)]"}`}>
                           <span className="truncate">{m.label}</span>
@@ -909,7 +994,7 @@ export function ProjectWorkspace({
                         {presets.map((c) => (
                           <button key={c} type="button" className="h-3 w-3 rounded-full border border-white/50" style={{ backgroundColor: c }} onClick={async () => {
                             await patchSettings({ tagColors: { ...settings.tagColors, [tag]: c } });
-                            setMessage(t("common.save") + " \u2714");
+                            showWorkspaceMessage(t("common.save") + " \u2714", "success");
                           }} />
                         ))}
                       </span>
@@ -927,7 +1012,7 @@ export function ProjectWorkspace({
           <p className="text-xs leading-6 text-[color:var(--muted)]">{t("project.workspaceSettings.goalGuide")}</p>
         </label>
 
-        {message ? <p className="text-sm text-emerald-600 dark:text-emerald-300">{message}</p> : null}
+        {message ? <p className={messageTone === "danger" ? "text-sm text-rose-600 dark:text-rose-300" : messageTone === "success" ? "text-sm text-emerald-600 dark:text-emerald-300" : "text-sm text-[color:var(--muted)]"}>{message}</p> : null}
       </Panel>
 
       <div className="workspace-tabs-shell inline-flex max-w-full flex-col">
@@ -1054,7 +1139,7 @@ export function ProjectWorkspace({
                                 <Save className="h-4 w-4" />
                                 {t("project.participantsCard.save")}
                               </Button>
-                              <Button variant="danger" onClick={() => canRemove ? removeParticipant(participant.id) : setMessage(t("project.participantsCard.removeLocked"))} disabled={participantEditingDisabled}>
+                                <Button variant="danger" onClick={() => canRemove ? removeParticipant(participant.id) : showWorkspaceMessage(t("project.participantsCard.removeLocked"), "danger")} disabled={participantEditingDisabled}>
                                 <Trash2 className="h-4 w-4" />
                               </Button>
                             </div>
@@ -1142,7 +1227,20 @@ export function ProjectWorkspace({
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="font-semibold">{t("project.captureCard.speaker")}</p>
-                  <p className="mt-0.5 text-sm text-[color:var(--muted)]">{access.messageParticipants[0]?.name ?? t("common.none")}</p>
+                  {access.messageParticipants.length > 1 ? (
+                    <select
+                      className="mt-2 w-full rounded-xl border border-[color:var(--border)] bg-[color:var(--surface-strong)] px-3 py-2 text-sm outline-none"
+                      value={entryDraft.participantId}
+                      onChange={(event) => setEntryDraft({ ...entryDraft, participantId: event.target.value })}
+                      disabled={!access.canPostMessages}
+                    >
+                      {access.messageParticipants.map((participant) => (
+                        <option key={participant.id} value={participant.id}>{participant.name}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <p className="mt-0.5 text-sm text-[color:var(--muted)]">{access.messageParticipants[0]?.name ?? t("common.none")}</p>
+                  )}
                 </div>
                 <Button variant="ghost" className="shrink-0" onClick={() => setActiveTab("overview")}>{t("project.captureCard.openSharedRoom")}</Button>
               </div>

@@ -77,17 +77,20 @@ export function DashboardProjectList({
   const [sampleVisibilityTouched, setSampleVisibilityTouched] = useState(false);
 
   useEffect(() => {
-    setDndReady(true);
+    const timer = window.setTimeout(() => setDndReady(true), 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   useEffect(() => {
-    setVisibleProjectCount(INITIAL_VISIBLE_PROJECT_COUNT);
+    const timer = window.setTimeout(() => setVisibleProjectCount(INITIAL_VISIBLE_PROJECT_COUNT), 0);
+    return () => window.clearTimeout(timer);
   }, [showArchived]);
 
   useEffect(() => {
     if (sampleProjects.length === 0) return;
     if (sampleVisibilityTouched) return;
-    setShowSamples(!hasUserProjects);
+    const timer = window.setTimeout(() => setShowSamples(!hasUserProjects), 0);
+    return () => window.clearTimeout(timer);
   }, [hasUserProjects, sampleProjects.length, sampleVisibilityTouched]);
 
   const toggleSelect = (id: string) => {

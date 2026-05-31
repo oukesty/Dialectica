@@ -79,7 +79,7 @@ describe("notifications storage", () => {
     });
   });
 
-  it("keeps do-not-disturb notifications in history but suppresses storage when notifications are disabled", async () => {
+  it("suppresses local notification storage while notifications are disabled or do-not-disturb is active", async () => {
     await withTempWorkspace(async (setIdentity) => {
       const repository = await import("@/lib/data/repository");
       const { createDefaultSettings } = await import("@/lib/factories");
@@ -98,8 +98,8 @@ describe("notifications storage", () => {
         body: "A member joined while do-not-disturb was enabled.",
         projectId: "project-1",
       });
-      expect(Boolean(mutedStored)).toBe(true);
-      expect(await getNotifications(mutedSettings.profile.localIdentityId)).toHaveLength(1);
+      expect(mutedStored).toBe(null);
+      expect(await getNotifications(mutedSettings.profile.localIdentityId)).toHaveLength(0);
 
       const disabledSettings = createDefaultSettings("en");
       disabledSettings.profile.localIdentityId = "profile_notifications_disabled_test";
@@ -119,11 +119,22 @@ describe("notifications storage", () => {
       const simulatedEmail = await appendNotification(disabledSettings.profile.localIdentityId, {
         type: "email_trigger",
         title: "Email",
-        body: "Local simulated email notifications are retained for audit visibility.",
+        body: "Email notification records follow the same local notification settings.",
         projectId: "project-1",
       });
-      expect(Boolean(simulatedEmail)).toBe(true);
-      expect(await getNotifications(disabledSettings.profile.localIdentityId)).toHaveLength(1);
+      expect(simulatedEmail).toBe(null);
+      expect(await getNotifications(disabledSettings.profile.localIdentityId)).toHaveLength(0);
+    });
+  });
+
+  it("exposes external email delivery as an explicit unconfigured provider boundary", async () => {
+    await withTempWorkspace(async () => {
+      const { getExternalEmailProviderStatus } = await import("@/lib/email-notifications");
+
+      const status = getExternalEmailProviderStatus();
+
+      expect(status.configured).toBe(false);
+      expect(status.providerId).toBe("none");
     });
   });
 });

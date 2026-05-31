@@ -109,7 +109,7 @@ export const providerCatalog: ProviderDescriptor[] = [
     label: "OpenAI",
     vendor: "OpenAI",
     mode: "api",
-    description: "Server-side HTTP adapter for the current official OpenAI GPT-5.4, GPT-5, GPT-4.1, and reasoning families.",
+    description: "Sample provider configuration with default OpenAI model IDs. Model availability and naming may change; refer to official provider documentation.",
     website: "https://platform.openai.com/docs/models",
     implementationStage: "http",
     models: [
@@ -143,7 +143,7 @@ export const providerCatalog: ProviderDescriptor[] = [
     label: "Gemini",
     vendor: "Google",
     mode: "api",
-    description: "Server-side HTTP adapter for the current official Gemini 2.5 production models and Gemini 3 / 3.1 preview families listed in Google's model catalog.",
+    description: "Sample provider configuration with default Gemini model IDs. Model availability and naming may change; refer to official provider documentation.",
     website: "https://ai.google.dev/gemini-api/docs/models",
     implementationStage: "http",
     models: [
@@ -172,7 +172,7 @@ export const providerCatalog: ProviderDescriptor[] = [
     label: "Grok",
     vendor: "xAI",
     mode: "api",
-    description: "Server-side HTTP adapter for the current xAI Grok 4.20 beta and Grok 4.1 fast reasoning families.",
+    description: "Sample provider configuration with default xAI model IDs. Model availability and naming may change; refer to official provider documentation.",
     website: "https://docs.x.ai/docs/models",
     implementationStage: "http",
     models: [
@@ -199,7 +199,7 @@ export const providerCatalog: ProviderDescriptor[] = [
     label: "Claude",
     vendor: "Anthropic",
     mode: "api",
-    description: "Server-side HTTP adapter for the current Claude 4.6 / 4.5 public catalog published by Anthropic.",
+    description: "Sample provider configuration with default Claude model IDs. Model availability and naming may change; refer to official provider documentation.",
     website: "https://docs.anthropic.com/en/docs/about-claude/models/all-models",
     implementationStage: "http",
     models: [
@@ -225,7 +225,7 @@ export const providerCatalog: ProviderDescriptor[] = [
     label: "DeepSeek",
     vendor: "DeepSeek",
     mode: "api",
-    description: "Server-side HTTP adapter for the official public DeepSeek chat and reasoner models.",
+    description: "Sample provider configuration with default DeepSeek chat and reasoner model IDs. Model availability and naming may change; refer to official provider documentation.",
     website: "https://api-docs.deepseek.com/quick_start/pricing",
     implementationStage: "http",
     models: [
@@ -250,7 +250,7 @@ export const providerCatalog: ProviderDescriptor[] = [
     label: "Doubao",
     vendor: "ByteDance Volcano Engine",
     mode: "api",
-    description: "Server-side HTTP adapter for the current official Doubao Seed 1.6 family aliases and custom Ark endpoint IDs.",
+    description: "Sample provider configuration with default Doubao aliases and custom Ark endpoint IDs. Model availability and naming may change; refer to official provider documentation.",
     website: "https://www.volcengine.com/docs/82379/1330310",
     implementationStage: "http",
     models: [
@@ -277,7 +277,7 @@ export const providerCatalog: ProviderDescriptor[] = [
     label: "Qwen",
     vendor: "Alibaba Cloud",
     mode: "api",
-    description: "Server-side HTTP adapter for the current Qwen / Model Studio production aliases listed by Alibaba Cloud.",
+    description: "Sample provider configuration with default Qwen / Model Studio aliases. Model availability and naming may change; refer to official provider documentation.",
     website: "https://www.alibabacloud.com/help/en/model-studio/getting-started/models",
     implementationStage: "http",
     models: [

@@ -183,6 +183,7 @@ export interface UserKnowledgeGraphSummary {
   sourceProjectTitles: string[];
   graphMode: "2d" | "3d" | "both";
   status: UserKnowledgeGraph["status"];
+  errorMessage?: string;
   nodeCount: number;
   relationCount: number;
   createdAt: string;
@@ -256,6 +257,7 @@ export interface KnowledgeGraphPayload {
   scope: {
     locale: AppLocale;
     scopeMode?: "project" | "cross-project";
+    graphId?: string;
     projectId?: string;
     projectIds?: string[];
     query?: string;

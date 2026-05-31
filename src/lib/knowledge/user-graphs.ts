@@ -80,6 +80,37 @@ const GOAL_PATTERNS = [
   /\b(goal|objective|target|aim)\b/i,
   /(目标|目的|要达成|目標|目的|objectif|cible)/i,
 ] as const;
+const DEBUG_KNOWLEDGE_GRAPH = process.env.DEBUG_KNOWLEDGE_GRAPH === "true";
+
+type KnowledgeGraphLogPayload = Record<string, string | number | boolean | null | undefined>;
+
+function writeKnowledgeGraphLog(level: "debug" | "error", event: string, payload: KnowledgeGraphLogPayload = {}) {
+  const entry = {
+    scope: "knowledge-graph",
+    event,
+    ...payload,
+  };
+  const serialized = JSON.stringify(entry);
+  if (level === "debug") {
+    if (DEBUG_KNOWLEDGE_GRAPH) {
+      console.debug(serialized);
+    }
+    return;
+  }
+  console.error(serialized);
+}
+
+function logKnowledgeGraphDebug(event: string, payload?: KnowledgeGraphLogPayload) {
+  writeKnowledgeGraphLog("debug", event, payload);
+}
+
+function logKnowledgeGraphError(event: string, payload?: KnowledgeGraphLogPayload) {
+  writeKnowledgeGraphLog("error", event, payload);
+}
+
+function getLoggableErrorName(error: unknown) {
+  return error instanceof Error ? error.name : "UnknownError";
+}
 
 function localizeGraphText(locale: AppLocale, values: Partial<Record<AppLocale, string>> & { en: string }) {
   return values[locale] ?? values.en;
@@ -637,6 +668,7 @@ function toSummary(graph: UserKnowledgeGraph, canDelete: boolean): UserKnowledge
     sourceProjectTitles: graph.sourceProjectTitles,
     graphMode: graph.graphMode,
     status: graph.status,
+    errorMessage: graph.errorMessage,
     nodeCount: graph.stats.nodeCount,
     relationCount: graph.stats.relationCount,
     createdAt: graph.createdAt,
@@ -661,7 +693,7 @@ export async function generateUserGraphContent(graphId: string, locale: AppLocal
   if (!raw) return null;
   const graph = JSON.parse(raw) as UserKnowledgeGraph;
 
-  await updateUserGraph(graphId, { status: "generating" });
+  await updateUserGraph(graphId, { status: "generating", errorMessage: undefined });
 
   try {
     let allNodes: UserKnowledgeGraph["nodes"] = [];
@@ -742,8 +774,12 @@ export async function generateUserGraphContent(graphId: string, locale: AppLocal
 
         let aiResult: GraphAiResult | null = null;
 
-        console.log(`[GraphGen] Starting AI call for project "${project.title}" (${projectId}), provider: ${providerId}, model: ${model}`);
-        console.log(`[GraphGen] Messages to analyze: ${messages.length}`);
+        logKnowledgeGraphDebug("ai_call_start", {
+          providerId,
+          modelConfigured: Boolean(model),
+          messageCount: messages.length,
+          extractionMessageCount: messagesForExtraction.length,
+        });
 
         const attemptAiCall = async (prompt: string, attempt: number): Promise<GraphAiResult | null> => {
           try {
@@ -765,19 +801,25 @@ export async function generateUserGraphContent(graphId: string, locale: AppLocal
               history: [],
             });
 
-            console.log(`[GraphGen] Attempt ${attempt} - ok: ${response.ok}, reply length: ${response.reply?.length ?? 0}`);
-            if (response.reply) {
-              console.log(`[GraphGen] Attempt ${attempt} raw (first 300): ${response.reply.slice(0, 300)}`);
-            }
+            logKnowledgeGraphDebug("ai_call_result", {
+              providerId,
+              attempt,
+              ok: response.ok,
+              replyLength: response.reply?.length ?? 0,
+            });
             if (!response.ok) {
-              console.log(`[GraphGen] Attempt ${attempt} error: ${response.message}`);
+              logKnowledgeGraphError("ai_call_failed", {
+                providerId,
+                attempt,
+                replyLength: response.reply?.length ?? 0,
+              });
               return null;
             }
 
             if (!response.reply) return null;
 
             // Clean the reply: strip markdown, find JSON
-            let text = response.reply
+            const text = response.reply
               .replace(/```json\s*/gi, "")
               .replace(/```\s*/g, "")
               .trim();
@@ -792,14 +834,21 @@ export async function generateUserGraphContent(graphId: string, locale: AppLocal
               else if (text[i] === "}") { depth--; if (depth === 0 && start >= 0) { jsonCandidates.push(text.slice(start, i + 1)); start = -1; } }
             }
 
-            console.log(`[GraphGen] Attempt ${attempt}: found ${jsonCandidates.length} JSON candidate(s)`);
+            logKnowledgeGraphDebug("json_candidates_found", {
+              attempt,
+              candidateCount: jsonCandidates.length,
+            });
 
             // Try each candidate, prefer ones with "nodes" array
             for (const candidate of jsonCandidates.reverse()) { // reverse = try last (most likely the real output) first
               try {
                 const parsed = JSON.parse(candidate) as GraphAiResult;
                 if (Array.isArray(parsed.nodes) && parsed.nodes.length > 0) {
-                  console.log(`[GraphGen] Attempt ${attempt} parsed: ${parsed.nodes.length} nodes, ${parsed.relations?.length ?? 0} relations`);
+                  logKnowledgeGraphDebug("json_parse_success", {
+                    attempt,
+                    nodeCount: parsed.nodes.length,
+                    relationCount: parsed.relations?.length ?? 0,
+                  });
                   return parsed;
                 }
               } catch {
@@ -808,17 +857,24 @@ export async function generateUserGraphContent(graphId: string, locale: AppLocal
                 try {
                   const parsed = JSON.parse(fixed) as GraphAiResult;
                   if (Array.isArray(parsed.nodes) && parsed.nodes.length > 0) {
-                    console.log(`[GraphGen] Attempt ${attempt} fixed parse: ${parsed.nodes.length} nodes`);
+                    logKnowledgeGraphDebug("json_parse_recovered", {
+                      attempt,
+                      nodeCount: parsed.nodes.length,
+                    });
                     return parsed;
                   }
                 } catch { continue; }
               }
             }
 
-            console.log(`[GraphGen] Attempt ${attempt}: no valid JSON with nodes found`);
+            logKnowledgeGraphDebug("json_parse_no_nodes", { attempt });
             return null;
           } catch (err) {
-            console.log(`[GraphGen] Attempt ${attempt} exception: ${err instanceof Error ? err.message : err}`);
+            logKnowledgeGraphError("ai_call_exception", {
+              providerId,
+              attempt,
+              errorName: getLoggableErrorName(err),
+            });
             return null;
           }
         };
@@ -828,7 +884,7 @@ export async function generateUserGraphContent(graphId: string, locale: AppLocal
 
         // Attempt 2: if failed, retry with even stricter prompt
         if (!aiResult || !Array.isArray(aiResult.nodes) || aiResult.nodes.length === 0) {
-          console.log("[GraphGen] Attempt 1 failed, retrying with stricter prompt...");
+          logKnowledgeGraphDebug("ai_call_retry", { providerId, nextAttempt: 2 });
           const retryPrompt = `Return ONLY a JSON object. No explanation. No markdown. Start with the { character.
 
 Extract only the most important knowledge from this conversation.
@@ -847,7 +903,12 @@ Your ENTIRE response must be valid JSON. Start with { and end with }. No other t
           aiResult = await attemptAiCall(retryPrompt, 2);
         }
 
-        console.log(`[GraphGen] Final aiResult valid: ${Boolean(aiResult && Array.isArray(aiResult.nodes) && aiResult.nodes.length > 0)}`);
+        logKnowledgeGraphDebug("ai_result_validated", {
+          providerId,
+          valid: Boolean(aiResult && Array.isArray(aiResult.nodes) && aiResult.nodes.length > 0),
+          nodeCount: aiResult?.nodes?.length ?? 0,
+          relationCount: aiResult?.relations?.length ?? 0,
+        });
 
         if (aiResult && Array.isArray(aiResult.nodes) && aiResult.nodes.length > 0) {
           const keptNodes = selectGraphNodes(aiResult.nodes);
@@ -946,6 +1007,7 @@ Your ENTIRE response must be valid JSON. Start with { and end with }. No other t
     return await updateUserGraph(graphId, {
       locale: outputLocale,
       status: "ready",
+      errorMessage: undefined,
       nodes: allNodes,
       relations: allRelations,
       stats: {

@@ -1,8 +1,8 @@
 /**
- * Pre-dev cache cleaner — runs before `npm run dev`.
+ * Pre-dev cache cleaner - runs before `npm run dev`.
  *
  * What it does:
- *   1. Checks .next/ size — deletes if > 200 MB
+ *   1. Checks .next/ size - deletes if > 200 MB
  *   2. Removes root-level *.log files and temporary cache dirs
  *   3. Warns (never deletes) if data/ > 500 MB
  *
@@ -14,10 +14,11 @@
  *   - Delete cache-cleaning scripts or repository metadata
  */
 
-const fs = require("fs");
-const path = require("path");
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const ROOT = path.resolve(__dirname, "..");
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 function dirSizeBytes(dir) {
   let total = 0;
@@ -36,7 +37,7 @@ function dirSizeBytes(dir) {
       }
     }
   } catch {
-    // directory doesn't exist or can't be read
+    // directory does not exist or cannot be read
   }
   return total;
 }
@@ -54,21 +55,19 @@ function rmSafe(target) {
   }
 }
 
-// 1. Check .next/ cache size
 const nextDir = path.join(ROOT, ".next");
 if (fs.existsSync(nextDir)) {
   const nextSize = dirSizeBytes(nextDir);
   if (nextSize > 200 * 1024 * 1024) {
     rmSafe(".next");
-    console.log(`[Clean] .next cache exceeded 200 MB (${mb(nextSize)} MB) — cleaned`);
+    console.log(`[Clean] .next cache exceeded 200 MB (${mb(nextSize)} MB) - cleaned`);
   } else {
     console.log(`[Clean] .next cache OK (${mb(nextSize)} MB)`);
   }
 }
 
-// 2. Clean root-level junk
 const rootFiles = fs.readdirSync(ROOT);
-let cleaned = [];
+const cleaned = [];
 for (const file of rootFiles) {
   const full = path.join(ROOT, file);
   try {
@@ -78,9 +77,10 @@ for (const file of rootFiles) {
       cleaned.push(file);
     }
   } catch {
-    // skip
+    // skip inaccessible files
   }
 }
+
 if (rmSafe(".tmp")) cleaned.push(".tmp/");
 if (rmSafe(".tools")) cleaned.push(".tools/");
 if (rmSafe("output")) cleaned.push("output/");
@@ -91,11 +91,10 @@ if (cleaned.length > 0) {
   console.log(`[Clean] Removed junk: ${cleaned.join(", ")}`);
 }
 
-// 3. Warn about data/ size (never delete)
 const dataDir = path.join(ROOT, "data");
 if (fs.existsSync(dataDir)) {
   const dataSize = dirSizeBytes(dataDir);
   if (dataSize > 500 * 1024 * 1024) {
-    console.log(`[Warning] data/ directory is large (${mb(dataSize)} MB) — consider manually cleaning old data`);
+    console.log(`[Warning] data/ directory is large (${mb(dataSize)} MB) - consider manually cleaning old data`);
   }
 }

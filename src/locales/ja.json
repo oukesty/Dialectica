@@ -21,7 +21,7 @@
     "clearAll": "すべて削除",
     "clickToOpen": "クリックして開く",
     "notificationDoNotDisturb": "通知をミュート",
-    "notificationDoNotDisturbHint": "通知一覧には残りますが、未読バッジでは知らせません。"
+    "notificationDoNotDisturbHint": "オンの間、新しいローカル通知の記録と表示を一時停止します。"
   },
   "common": {
     "create": "作成",
@@ -832,9 +832,10 @@
     "keyboardShortcuts": "キーボードショートカット",
     "clickToChange": "キーをクリックしてから新しいショートカットを押してください",
     "restoreDefaults": "デフォルトに戻す",
-    "emailNotifications": "ローカル模擬メール通知",
-    "emailNotificationsHint": "メール相当の重要イベントをローカル通知として記録します。このローカルビルドでは実際のメールは送信されません。",
-    "emailEnabled": "模擬メール通知の記録を有効にする",
+    "emailNotifications": "メール通知 Provider",
+    "emailNotificationsHint": "外部メール Provider は未設定です。メール相当の重要イベントはローカル通知としてのみ記録されます。",
+    "emailEnabled": "メール相当のイベントをローカル通知として記録する",
+    "externalEmailProviderNotConfigured": "外部メール Provider 未設定",
     "emailAddress": "通知メールアドレス",
     "onNewMember": "新メンバー参加時に通知",
     "onAiSummary": "AI要約完了時に通知",

@@ -51,10 +51,10 @@ export function AttachmentsPanel({
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
-  const readErrorMessage = async (response: Response) => {
+  const readErrorMessage = useCallback(async (response: Response) => {
     const payload = await response.json().catch(() => null) as { error?: string } | null;
     return payload?.error ?? t("errors.unexpected");
-  };
+  }, [t]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -71,7 +71,7 @@ export function AttachmentsPanel({
     } finally {
       setLoading(false);
     }
-  }, [projectId, t]);
+  }, [projectId, readErrorMessage, t]);
 
   useEffect(() => { void load(); }, [load]);
 

@@ -9,6 +9,8 @@ import { formatDateTime } from "@/lib/format";
 import { AppLocale, DiscussionProject } from "@/lib/types";
 import { KnowledgeProjectSnapshot } from "@/lib/knowledge/types";
 
+type MessageTone = "success" | "danger" | "default";
+
 export function ProjectKnowledgePanel({
   locale,
   project,
@@ -20,15 +22,18 @@ export function ProjectKnowledgePanel({
   const [snapshot, setSnapshot] = useState<KnowledgeProjectSnapshot | null>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [messageTone, setMessageTone] = useState<MessageTone>("default");
 
   const loadSnapshot = useCallback(
     async (force = false, options: { generateGraphLinks?: boolean } = {}) => {
       setLoading(true);
       setMessage(null);
+      setMessageTone("default");
       try {
         const shouldPost = force || Boolean(options.generateGraphLinks);
         if (project.metadata.isSample && options.generateGraphLinks) {
           setMessage(t("knowledge.sampleGraphGenerationDisabled"));
+          setMessageTone("danger");
           return;
         }
         const response = await fetch(`/api/projects/${project.id}/knowledge?locale=${locale}`, {
@@ -42,14 +47,16 @@ export function ProjectKnowledgePanel({
         setSnapshot(payload.snapshot);
         if (shouldPost) {
           setMessage(options.generateGraphLinks ? t("knowledge.generateGraphSuccess") : t("knowledge.extractSuccess"));
+          setMessageTone("success");
         }
       } catch (error) {
         setMessage(error instanceof Error ? error.message : t("errors.unexpected"));
+        setMessageTone("danger");
       } finally {
         setLoading(false);
       }
     },
-    [locale, project.id, t],
+    [locale, project.id, project.metadata.isSample, t],
   );
 
   useEffect(() => {
@@ -97,7 +104,7 @@ export function ProjectKnowledgePanel({
           </div>
         </div>
 
-        {message ? <p className="text-sm text-emerald-600 dark:text-emerald-300">{message}</p> : null}
+        {message ? <p className={messageTone === "danger" ? "text-sm text-rose-600 dark:text-rose-300" : messageTone === "success" ? "text-sm text-emerald-600 dark:text-emerald-300" : "text-sm text-[color:var(--muted)]"}>{message}</p> : null}
         <p className="text-xs leading-5 text-[color:var(--muted)]">{t("knowledge.graphQualityHint")}</p>
 
         {snapshot ? (

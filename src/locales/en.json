@@ -21,7 +21,7 @@
     "clearAll": "Clear all",
     "clickToOpen": "Click to open",
     "notificationDoNotDisturb": "Do Not Disturb",
-    "notificationDoNotDisturbHint": "Notifications will still appear here, but the unread badge will stay muted."
+    "notificationDoNotDisturbHint": "New local notifications are suppressed while this is on."
   },
   "common": {
     "create": "Create",
@@ -832,9 +832,10 @@
     "keyboardShortcuts": "Keyboard shortcuts",
     "clickToChange": "Click a key, then press your new shortcut",
     "restoreDefaults": "Restore defaults",
-    "emailNotifications": "Local simulated email notifications",
-    "emailNotificationsHint": "Record local notification entries for email-worthy events. Dialectica does not send real email in this local build.",
-    "emailEnabled": "Enable simulated email notification records",
+    "emailNotifications": "Email notification provider",
+    "emailNotificationsHint": "External email provider is not configured. Email-worthy events are recorded as local notifications only.",
+    "emailEnabled": "Record email-worthy events as local notifications",
+    "externalEmailProviderNotConfigured": "External email provider not configured",
     "emailAddress": "Notification email address",
     "onNewMember": "Notify when a new member joins",
     "onAiSummary": "Notify when AI completes a summary",

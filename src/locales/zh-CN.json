@@ -21,7 +21,7 @@
     "clearAll": "清空全部",
     "clickToOpen": "点击打开",
     "notificationDoNotDisturb": "通知免打扰",
-    "notificationDoNotDisturbHint": "通知仍会保留在列表中，但不会再用红点提醒。"
+    "notificationDoNotDisturbHint": "开启后将暂停写入和展示新的本地通知。"
   },
   "common": {
     "create": "创建",
@@ -832,9 +832,10 @@
     "keyboardShortcuts": "键盘快捷键",
     "clickToChange": "点击键位后按下新的快捷键组合",
     "restoreDefaults": "恢复默认",
-    "emailNotifications": "本地模拟邮件通知",
-    "emailNotificationsHint": "为适合邮件提醒的重要事件记录本地通知；当前本地版本不会真实发送邮件。",
-    "emailEnabled": "启用模拟邮件通知记录",
+    "emailNotifications": "邮件通知 Provider",
+    "emailNotificationsHint": "当前未配置外部邮件 Provider。适合邮件提醒的重要事件只会记录为本地通知。",
+    "emailEnabled": "将邮件类事件记录为本地通知",
+    "externalEmailProviderNotConfigured": "外部邮件 Provider 未配置",
     "emailAddress": "通知邮箱地址",
     "onNewMember": "新成员加入时通知",
     "onAiSummary": "AI 完成总结时通知",

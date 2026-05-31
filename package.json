@@ -5,7 +5,7 @@
   "license": "MIT",
   "description": "AI-ready multi-party debate, discussion, and meeting platform for structured context capture, argument mapping, evaluation, and future provider integration.",
   "scripts": {
-    "predev": "node ./scripts/clean-cache.js",
+    "predev": "node ./scripts/clean-cache.mjs",
     "dev": "next dev",
     "prebuild": "node -e \"fs=require('fs');try{fs.rmSync('.next',{recursive:true,force:true})}catch{}\"",
     "build": "node ./scripts/next-build-safe.cjs",
@@ -14,6 +14,8 @@
     "test": "node ./scripts/run-node-tests.mjs",
     "test:watch": "vitest --config vitest.config.mjs",
     "typecheck": "tsc --noEmit --incremental false",
+    "release:validate": "node ./scripts/release-validate.mjs",
+    "release:check": "npm run release:validate && npm run lint && npm run typecheck && npm test && npm run build",
     "clean": "node -e \"fs=require('fs');['.next','out','dist','.eslintcache','.tmp','.tools','.turbo','.swc','coverage','output'].forEach(d=>{try{fs.rmSync(d,{recursive:true,force:true})}catch{}});require('fs').readdirSync('.').filter(f=>f.endsWith('.log')||f.endsWith('.tsbuildinfo')).forEach(f=>{try{fs.unlinkSync(f)}catch{}})\"",
     "clean:all": "npm run clean && node -e \"fs=require('fs');try{fs.rmSync('node_modules',{recursive:true,force:true})}catch{}\"",
     "clean:artifacts": "node ./scripts/prune-artifacts.mjs",
@@ -26,7 +28,7 @@
     "clsx": "^2.1.1",
     "jspdf": "^4.2.1",
     "lucide-react": "^0.552.0",
-    "next": "^16.0.0",
+    "next": "^16.2.6",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-markdown": "^10.1.0",
@@ -43,9 +45,13 @@
     "autoprefixer": "^10.4.21",
     "eslint": "^9.38.0",
     "eslint-config-next": "^16.0.0",
-    "postcss": "^8.5.6",
+    "postcss": "^8.5.15",
     "tailwindcss": "^3.4.18",
     "typescript": "^5.9.3",
     "vitest": "^3.2.4"
+  },
+  "overrides": {
+    "dompurify": "^3.4.7",
+    "postcss": "^8.5.15"
   }
 }

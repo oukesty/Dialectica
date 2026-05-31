@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { startTransition, useCallback, useEffect, useMemo, useState } from "react";
-import { BookOpenText, ChevronDown, Eye, EyeOff, Filter, Layers3, Loader2, Network, Plus, Search, Sparkles, Trash2 } from "lucide-react";
+import { BookOpenText, ChevronDown, Eye, EyeOff, Filter, Layers3, Loader2, Network, Plus, RefreshCcw, Search, Sparkles, Trash2 } from "lucide-react";
 import { useI18n } from "@/components/providers/i18n-provider";
 import { Badge, Button, LinkButton, Panel } from "@/components/ui/primitives";
 import { formatDateTime } from "@/lib/format";
 import { AppLocale } from "@/lib/types";
-import { isProtectedSampleKnowledgeGraph, KnowledgeNode, KnowledgeOverview, UserKnowledgeGraphSummary } from "@/lib/knowledge/types";
+import type { CrossGraphAnalysis, KnowledgeNode, KnowledgeOverview, UserKnowledgeGraphSummary } from "@/lib/knowledge/types";
+import { isProtectedSampleKnowledgeGraph } from "@/lib/knowledge/types";
 import { getProviderDescriptor } from "@/lib/providers/provider-catalog";
 
 const inputClass = "form-field";
@@ -49,7 +50,7 @@ export function KnowledgeHub({
   const [topic, setTopic] = useState("");
   const [category, setCategory] = useState("");
   const [projectId, setProjectId] = useState(initialProjectId ?? "");
-  const [deletedProjectIds, setDeletedProjectIds] = useState<string[]>([]);
+  const [deletedProjectIds] = useState<string[]>([]);
 
   const filtered = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -90,24 +91,20 @@ export function KnowledgeHub({
   const [graphMessage, setGraphMessage] = useState<string | null>(null);
   const [graphMessageTone, setGraphMessageTone] = useState<"success" | "danger">("success");
   const [userGraphsLoadError, setUserGraphsLoadError] = useState<string | null>(null);
+  const [retryingGraphId, setRetryingGraphId] = useState<string | null>(null);
 
   // Cross-graph analysis
   const [analyzeGraphIds, setAnalyzeGraphIds] = useState<string[]>([]);
   const [analyzeGoal, setAnalyzeGoal] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
-  const [analysisResult, setAnalysisResult] = useState<{
-    sharedConcepts: Array<{ concept: string; graphIds: string[]; note: string }>;
-    conflictingViewpoints: Array<{ topic: string; viewpoints: Array<{ graphId: string; stance: string }>; note: string }>;
-    supportingConclusions: Array<{ conclusion: string; graphIds: string[]; evidence: string }>;
-    unrelatedNodes: Array<{ nodeId: string; graphId: string; reason: string }>;
-  } | null>(null);
+  const [analysisResult, setAnalysisResult] = useState<CrossGraphAnalysis | null>(null);
 
-  const readErrorMessage = async (response: Response) => {
+  const readErrorMessage = useCallback(async (response: Response) => {
     const payload = await response.json().catch(() => null) as { error?: string } | null;
     if (payload?.error) return payload.error;
     const text = await response.text().catch(() => "");
     return text || t("errors.unexpected");
-  };
+  }, [t]);
 
   const loadUserGraphs = useCallback(async () => {
     const res = await fetch(`/api/knowledge/user-graphs?locale=${encodeURIComponent(locale)}`);
@@ -119,13 +116,32 @@ export function KnowledgeHub({
       setUserGraphs(data.graphs);
       setUserGraphsLoadError(null);
     });
-  }, [locale, t]);
+  }, [locale, readErrorMessage]);
 
   useEffect(() => {
     void loadUserGraphs().catch((error) => {
       setUserGraphsLoadError(error instanceof Error ? error.message : t("errors.unexpected"));
     });
   }, [loadUserGraphs, t]);
+
+  useEffect(() => {
+    let alive = true;
+    fetch(`/api/knowledge/user-graphs/analyze?locale=${encodeURIComponent(locale)}`, { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) return null;
+        return await response.json() as { analysis: CrossGraphAnalysis | null };
+      })
+      .then((payload) => {
+        if (!alive || !payload?.analysis) return;
+        setAnalysisResult(payload.analysis);
+        setAnalyzeGraphIds(payload.analysis.sourceGraphIds);
+        setAnalyzeGoal(payload.analysis.analysisGoal);
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [locale]);
 
   const shouldCollapseGraphSamples = userGraphs.some((graph) => graph.canDelete) || projects.some((project) => !project.isProtectedSample);
   const shouldCollapseProjectSamples = projects.some((project) => !project.isProtectedSample) || userGraphs.some((graph) => graph.canDelete);
@@ -176,17 +192,42 @@ export function KnowledgeHub({
       if (!response.ok) {
         throw new Error(await readErrorMessage(response));
       }
+      const payload = await response.json() as { graph?: { status?: UserKnowledgeGraphSummary["status"]; errorMessage?: string } };
       setCreateTitle("");
       setCreateProjectIds([]);
       setShowCreateForm(false);
       await loadUserGraphs();
-      setGraphMessage(t("assistant.graphGenerating"));
-      setGraphMessageTone("success");
+      setGraphMessage(payload.graph?.status === "failed" ? (payload.graph.errorMessage ?? t("knowledge.graphFailed")) : payload.graph?.status === "ready" ? t("knowledge.graphReady") : t("assistant.graphGenerating"));
+      setGraphMessageTone(payload.graph?.status === "failed" ? "danger" : "success");
     } catch (error) {
       setGraphMessage(error instanceof Error ? error.message : t("errors.unexpected"));
       setGraphMessageTone("danger");
     } finally {
       setCreating(false);
+    }
+  };
+
+  const handleRetryGraph = async (graphId: string) => {
+    setRetryingGraphId(graphId);
+    setGraphMessage(null);
+    try {
+      const response = await fetch(`/api/knowledge/user-graphs/${graphId}?locale=${encodeURIComponent(locale)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "retry" }),
+      });
+      if (!response.ok) {
+        throw new Error(await readErrorMessage(response));
+      }
+      const payload = await response.json() as { graph?: { status?: UserKnowledgeGraphSummary["status"]; errorMessage?: string } };
+      await loadUserGraphs();
+      setGraphMessage(payload.graph?.status === "failed" ? (payload.graph.errorMessage ?? t("knowledge.graphFailed")) : t("knowledge.graphReady"));
+      setGraphMessageTone(payload.graph?.status === "failed" ? "danger" : "success");
+    } catch (error) {
+      setGraphMessage(error instanceof Error ? error.message : t("errors.unexpected"));
+      setGraphMessageTone("danger");
+    } finally {
+      setRetryingGraphId(null);
     }
   };
 
@@ -566,6 +607,11 @@ export function KnowledgeHub({
                         {graph.status === "generating" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
                         {graph.status === "generating" ? t("knowledge.graphGenerating") : t("knowledge.graphPending")}
                       </Button>
+                    ) : graph.status === "failed" ? (
+                      <Button variant="ghost" className="h-8 gap-1.5 px-3 text-xs" disabled={retryingGraphId === graph.id} onClick={() => void handleRetryGraph(graph.id)}>
+                        {retryingGraphId === graph.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCcw className="h-3.5 w-3.5" />}
+                        {t("common.retry")}
+                      </Button>
                     ) : null}
                     <button type="button" onClick={() => void handleToggleVisibility(graph.id, graph.visibility)} className="text-xs text-[color:var(--muted)] hover:text-[color:var(--foreground)]" title={graph.visibility === "public" ? t("knowledge.makePrivate") : t("knowledge.makePublic")}>
                       {graph.visibility === "public" ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
@@ -630,7 +676,14 @@ export function KnowledgeHub({
                                         {t("knowledge.openGraph")}
                                       </LinkButton>
                                     ) : (
-                                      <Badge>{version.status === "generating" ? t("knowledge.graphGenerating") : version.status === "pending" ? t("knowledge.graphPending") : t("knowledge.graphFailed")}</Badge>
+                                      version.status === "failed" ? (
+                                        <Button variant="ghost" className="h-7 gap-1 px-2.5 text-[11px]" disabled={retryingGraphId === version.id} onClick={() => void handleRetryGraph(version.id)}>
+                                          {retryingGraphId === version.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCcw className="h-3 w-3" />}
+                                          {t("common.retry")}
+                                        </Button>
+                                      ) : (
+                                        <Badge>{version.status === "generating" ? t("knowledge.graphGenerating") : t("knowledge.graphPending")}</Badge>
+                                      )
                                     )}
                                     {version.canDelete ? (
                                       <Button

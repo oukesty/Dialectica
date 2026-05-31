@@ -25,17 +25,16 @@ function notifFile(userId: string) {
   return path.join(notifRoot, `${userId}.json`);
 }
 
-async function canStoreNotification(userId: string, type: NotificationEntry["type"]) {
-  if (type === "email_trigger") {
-    return true;
-  }
-
+export async function canStoreNotification(userId: string) {
   try {
     const settings = await getSettingsForIdentity(userId, { includeSecrets: false });
     if (!settings) {
       return true;
     }
     if (!settings.collaborationPreferences.notificationsEnabled) {
+      return false;
+    }
+    if (settings.collaborationPreferences.notificationDoNotDisturb) {
       return false;
     }
     return true;
@@ -45,7 +44,7 @@ async function canStoreNotification(userId: string, type: NotificationEntry["typ
 }
 
 export async function appendNotification(userId: string, entry: Omit<NotificationEntry, "id" | "timestamp" | "read">) {
-  if (!(await canStoreNotification(userId, entry.type))) {
+  if (!(await canStoreNotification(userId))) {
     return null;
   }
 

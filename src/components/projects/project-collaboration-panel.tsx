@@ -715,6 +715,13 @@ export function ProjectCollaborationPanel({
     }
   };
 
+  const copyInviteText = async (invite: CollaborationState["invites"][number], kind: "token" | "url") => {
+    const text = kind === "token"
+      ? invite.token
+      : new URL(invite.inviteUrl, window.location.origin).toString();
+    await copyMessageText(text);
+  };
+
   const clampAutomationThreshold = (value: number, mode: NormalizedSummaryAutomationMode, fallback: number) => {
     if (!Number.isFinite(value)) return fallback;
     return normalizeSummaryThreshold(value, mode === "assistive" ? "assistive" : "basic", fallback);
@@ -904,7 +911,7 @@ export function ProjectCollaborationPanel({
       refreshAbortRef.current?.abort();
       refreshAbortRef.current = null;
     };
-  }, [project.id, refresh, settings.collaborationPreferences.syncPollingMs]);
+  }, [locale, project.id, refresh, settings.collaborationPreferences.syncPollingMs]);
 
   useEffect(() => {
     if (!taskBusy) {
@@ -1547,7 +1554,7 @@ export function ProjectCollaborationPanel({
     } finally {
       setRoomAiBusy(false);
     }
-  }, [locale, onProjectChange, project.id, project.language, t]);
+  }, [onProjectChange, project.id, project.language, t]);
 
   const requestRoomAiSummary = async () => {
     if (sampleReadOnlyLocked) {
@@ -3493,6 +3500,16 @@ export function ProjectCollaborationPanel({
                   </div>
                   <p className="mt-3 break-all text-sm font-semibold">{invite.token}</p>
                   <p className="mt-2 text-xs leading-5 text-[color:var(--muted)]">{invite.note || invite.inviteUrl}</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button variant="ghost" className="h-8 gap-1.5 px-3 text-xs" onClick={() => void copyInviteText(invite, "url")}>
+                      <Copy className="h-3.5 w-3.5" />
+                      {`${t("common.copy")} URL`}
+                    </Button>
+                    <Button variant="ghost" className="h-8 gap-1.5 px-3 text-xs" onClick={() => void copyInviteText(invite, "token")}>
+                      <Copy className="h-3.5 w-3.5" />
+                      {`${t("common.copy")} ${t("project.collaborationPanel.inviteToken")}`}
+                    </Button>
+                  </div>
                   <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-[color:var(--muted)]">
                     <span>{formatDateTime(invite.createdAt, locale)}</span>
                     {invite.expiresAt ? <span>{`• ${formatDateTime(invite.expiresAt, locale)}`}</span> : null}

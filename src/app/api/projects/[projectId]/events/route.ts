@@ -4,7 +4,6 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { resolveAutoTriggeredTasks } from "@/lib/ai/summary-automation";
 import { activateAssistantEventRevision, appendCollaborationMessage, getCollaborationState, sanitizeCollaborationStateForClient, saveCollaborationState, toggleEventReaction, updatePresence } from "@/lib/collaboration/store";
-import { CollaborationState } from "@/lib/collaboration/types";
 import { getProject, getSettings, syncRoomFromParticipants, upsertProject } from "@/lib/data/repository";
 import { getProjectAccessState, isProjectWorkspaceArchived } from "@/lib/project-access";
 import { AppLocale, DiscussionProject, ENTRY_KINDS, PRESENCE_STATUSES } from "@/lib/types";

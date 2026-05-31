@@ -75,6 +75,10 @@ export default async function KnowledgeGraphPage({
   const graph = activeUserGraph?.status === "ready" && activeUserGraph.nodes.length > 0
     ? {
         ...baseGraph,
+        scope: {
+          ...baseGraph.scope,
+          graphId: activeUserGraph.id,
+        },
         nodes: activeUserGraph.nodes,
         relations: activeGraphRelations,
         projects: baseGraph.projects.map((project) => {

@@ -133,10 +133,10 @@ export function AppShell({
     return pathname === href || pathname.startsWith(`${href}/`);
   };
 
-  const readNotificationError = async (response: Response) => {
+  const readNotificationError = useCallback(async (response: Response) => {
     const payload = await response.json().catch(() => null) as { error?: string } | null;
     return payload?.error ?? t("errors.unexpected");
-  };
+  }, [t]);
 
   const loadNotifications = useCallback(async (options: { showError?: boolean } = {}) => {
     const { showError = false } = options;
@@ -159,7 +159,7 @@ export function AppShell({
         setNotifError(error instanceof Error ? error.message : t("errors.unexpected"));
       }
     }
-  }, [t]);
+  }, [readNotificationError, t]);
 
   const loadNotificationPreferences = useCallback(async () => {
     try {
@@ -249,6 +249,8 @@ export function AppShell({
       setNotifBusy(false);
     }
   };
+  const visibleNotifications = notifDoNotDisturb ? [] : notifs;
+  const visibleUnreadCount = notifDoNotDisturb ? 0 : unreadCount;
 
   return (
     <div className="min-h-screen bg-app-shell text-[color:var(--foreground)]">
@@ -308,15 +310,15 @@ export function AppShell({
                 });
               }} className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-[color:var(--border)] bg-[color:var(--surface-muted)] transition hover:bg-[color:var(--surface-hover)]" aria-label={t("nav.notifications")}>
                 <Bell className="h-4 w-4" />
-                {unreadCount > 0 && !notifDoNotDisturb ? <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">{unreadCount}</span> : null}
+                {visibleUnreadCount > 0 ? <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">{visibleUnreadCount}</span> : null}
               </button>
               {notifOpen ? (
                 <div className="animate-popover-in absolute right-0 top-full z-50 mt-2 w-80 rounded-2xl border border-[color:var(--border)] bg-[color:var(--surface-strong)] p-4 shadow-2xl">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-semibold">{t("nav.notifications")} {unreadCount > 0 ? `(${unreadCount})` : ""}</h3>
+                    <h3 className="text-sm font-semibold">{t("nav.notifications")} {visibleUnreadCount > 0 ? `(${visibleUnreadCount})` : ""}</h3>
                     <div className="flex items-center gap-2">
-                      {unreadCount > 0 ? <button type="button" disabled={notifBusy} className="text-[10px] text-[color:var(--brand-solid)] disabled:opacity-50" onClick={() => { void runNotificationAction({}, () => { setUnreadCount(0); setNotifs((current) => current.map((entry) => ({ ...entry, read: true }))); }); }}>{t("nav.markAllRead")}</button> : null}
-                      {notifs.length > 0 ? <button type="button" disabled={notifBusy} className="text-[10px] text-red-500 disabled:opacity-50" onClick={() => { void runNotificationAction({ action: "clearAll" }, () => { setNotifs([]); setUnreadCount(0); }); }}>{t("nav.clearAll")}</button> : null}
+                      {visibleUnreadCount > 0 ? <button type="button" disabled={notifBusy} className="text-[10px] text-[color:var(--brand-solid)] disabled:opacity-50" onClick={() => { void runNotificationAction({}, () => { setUnreadCount(0); setNotifs((current) => current.map((entry) => ({ ...entry, read: true }))); }); }}>{t("nav.markAllRead")}</button> : null}
+                      {visibleNotifications.length > 0 ? <button type="button" disabled={notifBusy} className="text-[10px] text-red-500 disabled:opacity-50" onClick={() => { void runNotificationAction({ action: "clearAll" }, () => { setNotifs([]); setUnreadCount(0); }); }}>{t("nav.clearAll")}</button> : null}
                       <button type="button" onClick={() => setNotifOpen(false)} className="text-xs text-[color:var(--muted)]">{"\u2715"}</button>
                     </div>
                   </div>
@@ -341,11 +343,11 @@ export function AppShell({
                     </button>
                   </div>
                   {notifError ? <p className="mt-3 text-xs text-rose-600 dark:text-rose-300">{notifError}</p> : null}
-                  {notifs.length === 0 ? (
+                  {visibleNotifications.length === 0 ? (
                     <div className="mt-3 rounded-xl border border-dashed border-[color:var(--border)] px-4 py-6 text-center text-xs text-[color:var(--muted)]">{t("nav.noNotifications")}</div>
                   ) : (
                     <div className="mt-3 max-h-72 space-y-1.5 overflow-y-auto scroll-fade-y">
-                      {notifs.slice(0, 20).map((n) => (
+                      {visibleNotifications.slice(0, 20).map((n) => (
                         <div
                           key={n.id}
                           className={`${n.href || !n.read ? "cursor-pointer" : "cursor-default"} rounded-lg border px-3 py-2 text-xs transition ${n.read ? "border-[color:var(--border)] bg-[color:var(--surface-muted)] opacity-70" : "border-[color:var(--brand-solid)]/30 bg-[color:var(--brand-soft)]"}`}

@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
 import { getSettings } from "@/lib/data/repository";
-import { canManageUserGraph, deleteUserGraph, getUserGraph, updateUserGraph } from "@/lib/knowledge/user-graphs";
+import { canManageUserGraph, deleteUserGraph, generateUserGraphContent, getUserGraph, updateUserGraph } from "@/lib/knowledge/user-graphs";
 import { isProtectedSampleKnowledgeGraph } from "@/lib/knowledge/types";
 import { isLocale } from "@/lib/i18n";
 import { AppLocale } from "@/lib/types";
@@ -89,6 +89,91 @@ export async function PUT(
     }, { status: 500 });
   }
   return NextResponse.json({ graph: updated });
+}
+
+export async function POST(
+  request: Request,
+  context: { params: Promise<{ graphId: string }> },
+) {
+  const { graphId } = await context.params;
+  const settings = await getSettings();
+  const url = new URL(request.url);
+  const locale = isLocale(url.searchParams.get("locale") ?? "")
+    ? (url.searchParams.get("locale") as AppLocale)
+    : settings.locale;
+  const body = await request.json().catch(() => null) as { action?: string } | null;
+  if (body?.action !== "retry") {
+    return NextResponse.json({
+      error: localize(locale, {
+        "zh-CN": "图谱操作无效，请刷新后重试。",
+        en: "The graph action is invalid. Refresh and try again.",
+        ja: "グラフ操作が無効です。更新して再試行してください。",
+        ko: "그래프 작업이 올바르지 않습니다. 새로고침 후 다시 시도하세요.",
+        fr: "L'action sur le graphe est invalide. Actualisez puis reessayez.",
+        ru: "Недопустимое действие с графом. Обновите страницу и повторите попытку.",
+      }),
+    }, { status: 400 });
+  }
+
+  const viewer = {
+    identityId: settings.profile.localIdentityId,
+    displayName: settings.profile.displayName,
+  };
+  const graph = await getUserGraph(graphId, viewer, locale);
+  if (!graph || !await canManageUserGraph(graph, viewer)) {
+    return NextResponse.json({
+      error: localize(locale, {
+        "zh-CN": "图谱不存在，或它不属于你当前的账号。",
+        en: "The graph was not found or is not owned by your current account.",
+        ja: "グラフが見つからないか、現在のアカウントが所有していません。",
+        ko: "그래프를 찾을 수 없거나 현재 계정이 소유한 그래프가 아닙니다.",
+        fr: "Le graphe est introuvable ou n'appartient pas a votre compte actuel.",
+        ru: "Граф не найден или не принадлежит текущей учётной записи.",
+      }),
+    }, { status: 404 });
+  }
+  if (isProtectedSampleKnowledgeGraph(graph)) {
+    return NextResponse.json({
+      error: localize(locale, {
+        "zh-CN": "示例图谱受保护，不能重新生成。",
+        en: "Sample graphs are protected and cannot be regenerated.",
+        ja: "サンプルグラフは保護されているため再生成できません。",
+        ko: "샘플 그래프는 보호되어 있어 다시 생성할 수 없습니다.",
+        fr: "Les graphes d'exemple sont proteges et ne peuvent pas etre regeneres.",
+        ru: "Графы-примеры защищены и не могут быть созданы заново.",
+      }),
+    }, { status: 403 });
+  }
+  if (graph.status === "pending" || graph.status === "generating") {
+    return NextResponse.json({
+      error: localize(locale, {
+        "zh-CN": "图谱仍在生成中，请等待当前任务结束。",
+        en: "The graph is still being generated. Wait for the current run to finish.",
+        ja: "グラフはまだ生成中です。現在の処理が完了するまでお待ちください。",
+        ko: "그래프가 아직 생성 중입니다. 현재 작업이 끝날 때까지 기다려 주세요.",
+        fr: "Le graphe est encore en cours de generation. Attendez la fin de l'execution actuelle.",
+        ru: "Граф ещё создаётся. Дождитесь завершения текущего запуска.",
+      }),
+      graph,
+    }, { status: 409 });
+  }
+
+  const generatedGraph = await generateUserGraphContent(graph.id, graph.locale, settings);
+  const latestGraph = generatedGraph ?? await getUserGraph(graph.id, viewer, locale);
+  if (!latestGraph) {
+    return NextResponse.json({
+      error: localize(locale, {
+        "zh-CN": "重新生成图谱失败，请稍后重试。",
+        en: "Graph regeneration failed. Please try again later.",
+        ja: "グラフの再生成に失敗しました。しばらくしてから再試行してください。",
+        ko: "그래프를 다시 생성하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+        fr: "La regeneration du graphe a echoue. Reessayez plus tard.",
+        ru: "Не удалось заново создать граф. Повторите попытку позже.",
+      }),
+    }, { status: 500 });
+  }
+
+  return NextResponse.json({ graph: latestGraph });
 }
 
 export async function DELETE(

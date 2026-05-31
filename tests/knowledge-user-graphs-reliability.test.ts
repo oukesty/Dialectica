@@ -194,6 +194,153 @@ describe("user knowledge graph reliability", () => {
     });
   });
 
+  it("lets users retry a failed graph generation and stores the regenerated graph", async () => {
+    await withTempWorkspace(async (setIdentity, setGraphProviderReply) => {
+      const repository = await import("@/lib/data/repository");
+      const collaborationStore = await import("@/lib/collaboration/store");
+      const { createDefaultSettings } = await import("@/lib/factories");
+      const userGraphs = await import("@/lib/knowledge/user-graphs");
+      const graphRoute = await import("@/app/api/knowledge/user-graphs/[graphId]/route");
+
+      const settings = createDefaultSettings("en");
+      settings.provider.activeProviderId = "mock";
+      setIdentity(settings.profile.localIdentityId);
+      await repository.saveSettings(settings);
+
+      const project = repository.createProjectSkeleton("en", "discussion", settings);
+      project.title = "Retryable graph source";
+      project.goal = "Verify retry replaces a failed graph with source-backed knowledge.";
+      const savedProject = await repository.createProject(project, "en", {
+        skipAutoAnalyze: true,
+        settingsOverride: settings,
+      });
+      await collaborationStore.appendCollaborationMessage(savedProject, {
+        type: "message",
+        participantId: savedProject.participants[0]?.id,
+        message: "The launch should wait until privacy evidence and owner accountability are both confirmed.",
+      });
+
+      const graph = await userGraphs.createUserGraph({
+        ownerIdentityId: settings.profile.localIdentityId,
+        ownerDisplayName: settings.profile.displayName,
+        title: "Retry graph",
+        description: "",
+        sourceProjectIds: [savedProject.id],
+        sourceProjectTitles: [savedProject.title],
+        graphMode: "both",
+        visibility: "private",
+        locale: "en",
+      });
+      await userGraphs.updateUserGraph(graph.id, {
+        status: "failed",
+        errorMessage: "Previous provider failure.",
+      });
+
+      setGraphProviderReply(JSON.stringify({
+        nodes: [
+          {
+            id: "n1",
+            label: "Privacy evidence gates launch",
+            type: "evidence",
+            description: "The launch should wait until privacy evidence is confirmed by the team.",
+          },
+          {
+            id: "n2",
+            label: "Owner accountability must be confirmed",
+            type: "recommendation",
+            description: "The owner accountability path needs confirmation before launch.",
+          },
+        ],
+        relations: [
+          {
+            source: "n1",
+            target: "n2",
+            label: "both are required before launch",
+            type: "supports",
+          },
+        ],
+      }));
+
+      const response = await graphRoute.POST(
+        jsonRequest("http://test.local/api/knowledge/user-graphs/retry?locale=en", "POST", { action: "retry" }),
+        { params: Promise.resolve({ graphId: graph.id }) },
+      );
+      const payload = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(payload.graph.status).toBe("ready");
+      expect(payload.graph.nodes.length).toBeGreaterThan(0);
+      expect(payload.graph.errorMessage ?? "").toBe("");
+    });
+  });
+
+  it("exports the active user graph version instead of rebuilding a different visible scope", async () => {
+    await withTempWorkspace(async (setIdentity) => {
+      const repository = await import("@/lib/data/repository");
+      const { createDefaultSettings } = await import("@/lib/factories");
+      const userGraphs = await import("@/lib/knowledge/user-graphs");
+      const graphExportRoute = await import("@/app/api/knowledge/graph/route");
+
+      const settings = createDefaultSettings("en");
+      setIdentity(settings.profile.localIdentityId);
+      await repository.saveSettings(settings);
+
+      const graph = await userGraphs.createUserGraph({
+        ownerIdentityId: settings.profile.localIdentityId,
+        ownerDisplayName: settings.profile.displayName,
+        title: "Visible export graph",
+        description: "",
+        sourceProjectIds: ["project_export_a", "project_export_b"],
+        sourceProjectTitles: ["Export source A", "Export source B"],
+        graphMode: "both",
+        visibility: "private",
+        locale: "en",
+      });
+      await userGraphs.updateUserGraph(graph.id, {
+        status: "ready",
+        nodes: [{
+          id: "kg_project_export_a_n1",
+          title: "Only visible user graph node",
+          type: "conclusion",
+          category: "other",
+          summary: "This node belongs to the active user graph version and must be exported.",
+          sourceProjectId: "project_export_a",
+          sourceProjectTitle: "Export source A",
+          sourceDiscussionId: "project_export_a",
+          tags: ["export"],
+          topics: ["export"],
+          relatedParticipantIds: [],
+          evidenceReferences: [],
+          relatedNodeIds: [],
+          createdFrom: ["transcript"],
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+          provenance: {
+            projectId: "project_export_a",
+            projectTitle: "Export source A",
+            projectLocale: "en",
+            scenario: "discussion",
+            createdFrom: ["transcript"],
+            generatedAt: "2026-01-01T00:00:00.000Z",
+          },
+        }],
+        relations: [],
+        stats: { nodeCount: 1, relationCount: 0, topicCount: 1 },
+      });
+
+      const response = await graphExportRoute.GET(new Request(
+        `http://test.local/api/knowledge/graph?locale=en&graphId=${graph.id}&projectIds=project_export_a,project_export_b&scopeMode=cross-project&query=visible`,
+      ));
+      const payload = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(payload.graph.nodes).toHaveLength(1);
+      expect(payload.graph.nodes[0].title).toBe("Only visible user graph node");
+      expect(payload.graph.scope.projectIds).toEqual(["project_export_a", "project_export_b"]);
+      expect(payload.graph.scope.query).toBe("visible");
+    });
+  });
+
   it("uses the bulk graph API to delete all versions or keep only the latest", async () => {
     await withTempWorkspace(async (setIdentity) => {
       const repository = await import("@/lib/data/repository");

@@ -12,7 +12,7 @@ import {
   type CSSProperties,
   type PointerEvent as ReactPointerEvent,
 } from "react";
-import { LocateFixed, Minus, Move, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { LocateFixed, Minus, Move, Pencil, Plus, RotateCcw, Search, Trash2, X } from "lucide-react";
 import { useI18n } from "@/components/providers/i18n-provider";
 import { Badge, Button, Panel } from "@/components/ui/primitives";
 import { KnowledgeGraph3DView, type GraphPointerDebugEvent } from "@/components/knowledge/knowledge-graph-3d-view";
@@ -218,6 +218,29 @@ function buildGraphHref(
   return `/${locale}/knowledge/graph${query ? `?${query}` : ""}`;
 }
 
+function buildGraphExportHref(
+  locale: AppLocale,
+  graph: KnowledgeGraphPayload,
+  activeUserGraph: { id: string; sourceProjectIds: string[] } | null,
+) {
+  const params = new URLSearchParams();
+  params.set("locale", locale);
+  const graphId = graph.scope.graphId ?? activeUserGraph?.id;
+  if (graphId) params.set("graphId", graphId);
+  if (graph.scope.scopeMode) params.set("scopeMode", graph.scope.scopeMode);
+  if (graph.scope.projectId) params.set("projectId", graph.scope.projectId);
+  const scopedProjectIds = graph.scope.projectIds?.length
+    ? graph.scope.projectIds
+    : activeUserGraph?.sourceProjectIds;
+  if (scopedProjectIds && scopedProjectIds.length > 0) {
+    params.set("projectIds", [...new Set(scopedProjectIds)].join(","));
+  }
+  if (graph.scope.query) params.set("query", graph.scope.query);
+  if (graph.scope.topic) params.set("topic", graph.scope.topic);
+  if (graph.scope.category) params.set("category", graph.scope.category);
+  return `/api/knowledge/graph?${params.toString()}`;
+}
+
 function buildUserGraphGroupKey(sourceProjectIds: string[], graphId: string) {
   return sourceProjectIds.length > 0 ? [...sourceProjectIds].sort().join("|") : `graph:${graphId}`;
 }
@@ -240,7 +263,6 @@ function buildUserGraphVersionHref(
 
 const PROJECT_CLUSTER_PREVIEW_COUNT = 4;
 const PROJECT_CLUSTER_DELETE_PREF_KEY = "dialectica:knowledge:project-cluster-delete-confirm";
-const KNOWLEDGE_GRAPH_LEFT_PERCENT = 63;
 const KNOWLEDGE_GRAPH_STAGE_MIN_HEIGHT_PX = 1040;
 const KNOWLEDGE_GRAPH_STAGE_TOP_PADDING_PX = 18;
 const KNOWLEDGE_GRAPH_STAGE_BOTTOM_PADDING_PX = 8;
@@ -318,7 +340,7 @@ function buildGraphScopeKey(graph: KnowledgeGraphPayload) {
   const ids = graph.scope.projectIds?.length
     ? [...graph.scope.projectIds].sort().join(",")
     : graph.scope.projectId ?? "all";
-  return `dialectica-graph-v3:${scope}:${graph.scope.locale}:${ids}`;
+  return `dialectica-graph-v3:${scope}:${graph.scope.locale}:${graph.scope.graphId ?? "base"}:${ids}`;
 }
 
 function formatGeneratedWithLabel(
@@ -412,6 +434,7 @@ export function KnowledgeGraphView({
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 40, y: 32 });
   const [focusMode, setFocusMode] = useState(false);
+  const [graphNodeQuery, setGraphNodeQuery] = useState("");
   const graphModeFromUrl = normalizeGraphViewMode(searchParams.get("graphMode"));
   const debugGraphPointer = searchParams.get("debugGraphPointer") === "1";
   const [graphViewMode, setGraphViewMode] = useState<"2d" | "3d">(graphModeFromUrl ?? defaultGraphMode);
@@ -444,7 +467,7 @@ export function KnowledgeGraphView({
   const [projectClusterDeleteTarget, setProjectClusterDeleteTarget] = useState<{ projectIds: string[]; titles: string[] } | null>(null);
   // Auto-hide sample nodes when user has their own data
   const hasUserNodes = rawGraph.nodes.some((n) => !sampleProjectIds.includes(n.sourceProjectId));
-  const [showSamples, setShowSamples] = useState(!hasUserNodes);
+  const [showSamples] = useState(!hasUserNodes);
   // Filter graph data based on sample visibility
   const graph = useMemo(() => {
     if (showSamples || sampleProjectIds.length === 0) return rawGraph;
@@ -580,12 +603,12 @@ export function KnowledgeGraphView({
   );
   const projectClusterConfirmSuppressed = shouldSkipProjectClusterDeleteConfirm(projectClusterDeletePreference);
 
-  const readErrorMessage = async (response: Response) => {
+  const readErrorMessage = useCallback(async (response: Response) => {
     const payload = await response.json().catch(() => null) as { error?: string } | null;
     if (payload?.error) return payload.error;
     const text = await response.text().catch(() => "");
     return text || t("errors.unexpected");
-  };
+  }, [t]);
 
   useEffect(() => {
     setProjectClusterDeletePreference(readProjectClusterDeletePreference());
@@ -971,6 +994,24 @@ export function KnowledgeGraphView({
     () => graph.relations.filter((relation) => relation.sourceNodeId === activeNode?.id || relation.targetNodeId === activeNode?.id),
     [activeNode, graph.relations],
   );
+  const normalizedGraphNodeQuery = graphNodeQuery.trim().toLowerCase();
+  const graphNodeMatches = useMemo(() => {
+    if (!normalizedGraphNodeQuery) return [];
+    return graph.nodes
+      .filter((node) => {
+        const haystack = [
+          node.title,
+          getRenderableNodeSummary(node, getNodeMetaLabels(node)),
+          node.sourceProjectTitle,
+          node.category,
+          node.type,
+          ...node.tags,
+          ...node.topics,
+        ].join(" ").toLowerCase();
+        return haystack.includes(normalizedGraphNodeQuery);
+      })
+      .slice(0, 6);
+  }, [graph.nodes, normalizedGraphNodeQuery]);
   const effectiveRelationId = graph.relations.some((relation) => relation.id === activeRelationId)
     ? activeRelationId
     : connectedRelations[0]?.id ?? graph.relations[0]?.id;
@@ -1079,9 +1120,11 @@ export function KnowledgeGraphView({
     bumpViewportTick();
   }, [applyTransform, syncReactState, bumpViewportTick]);
 
-  const fitSelection = useCallback(() => {
-    if (!activeNode || !viewportRef.current) return;
-    const point = layout.positions.get(activeNode.id);
+  const focusGraphNode = useCallback((nodeId: string) => {
+    setActiveNodeId(nodeId);
+    setActiveRelationId(undefined);
+    if (graphViewMode !== "2d" || !viewportRef.current) return;
+    const point = layout.positions.get(nodeId);
     if (!point) return;
     const rect = viewportRef.current.getBoundingClientRect();
     const z = graph.mode === "project" ? 1.28 : 1.12;
@@ -1091,7 +1134,12 @@ export function KnowledgeGraphView({
     applyTransform();
     syncReactState();
     bumpViewportTick();
-  }, [activeNode, applyTransform, bumpViewportTick, graph.mode, layout.positions, syncReactState]);
+  }, [applyTransform, bumpViewportTick, graph.mode, graphViewMode, layout.positions, syncReactState]);
+
+  const fitSelection = useCallback(() => {
+    if (!activeNode) return;
+    focusGraphNode(activeNode.id);
+  }, [activeNode, focusGraphNode]);
 
   const handleNativePointerMove = useCallback((event: PointerEvent) => {
     const ds = dragState.current;
@@ -1413,8 +1461,60 @@ export function KnowledgeGraphView({
                 </div>
               ) : null}
               <Button variant="ghost" className="h-8 shrink-0 whitespace-nowrap px-3 text-xs" onClick={() => setFocusMode((current) => !current)}>{focusMode ? t("knowledge.exitFocusMode") : t("knowledge.focusMode")}</Button>
+              <div className="relative min-w-[14rem] flex-1 sm:max-w-sm">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[color:var(--muted)]" />
+                <input
+                  className="h-8 w-full rounded-lg border border-[color:var(--border)] bg-[color:var(--surface-strong)] pl-9 pr-8 text-xs outline-none transition focus:border-[color:var(--brand-solid)]"
+                  value={graphNodeQuery}
+                  onChange={(event) => setGraphNodeQuery(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && graphNodeMatches[0]) {
+                      event.preventDefault();
+                      focusGraphNode(graphNodeMatches[0].id);
+                    }
+                  }}
+                  placeholder={t("knowledge.filters.searchPlaceholder")}
+                  aria-label={t("knowledge.filters.search")}
+                />
+                {graphNodeQuery ? (
+                  <button
+                    type="button"
+                    onClick={() => setGraphNodeQuery("")}
+                    className="absolute right-2 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded text-[color:var(--muted)] transition hover:bg-[color:var(--surface-hover)] hover:text-[color:var(--foreground)]"
+                    aria-label={t("project.timelineCard.clearFilters")}
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                ) : null}
+                {normalizedGraphNodeQuery ? (
+                  <div className="absolute left-0 right-0 top-[calc(100%+0.4rem)] z-30 max-h-80 overflow-y-auto rounded-xl border border-[color:var(--border)] bg-[color:var(--surface-strong)] p-2 shadow-xl">
+                    {graphNodeMatches.length > 0 ? (
+                      <div className="space-y-1">
+                        <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--muted)]">
+                          {t("knowledge.resultsCount", { count: String(graphNodeMatches.length) })}
+                        </p>
+                        {graphNodeMatches.map((node) => (
+                          <button
+                            key={node.id}
+                            type="button"
+                            onClick={() => focusGraphNode(node.id)}
+                            className="w-full rounded-lg px-2 py-2 text-left transition hover:bg-[color:var(--surface-hover)]"
+                          >
+                            <span className="block truncate text-xs font-semibold">{node.title}</span>
+                            <span className="mt-0.5 block truncate text-[11px] text-[color:var(--muted)]">
+                              {`${t(`knowledge.nodeTypes.${node.type}`)} / ${node.sourceProjectTitle}`}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="px-2 py-2 text-xs text-[color:var(--muted)]">{t("knowledge.empty")}</p>
+                    )}
+                  </div>
+                ) : null}
+              </div>
             </div>
-            <a href={`/api/knowledge/graph?locale=${locale}${graph.scope.projectId ? `&projectId=${graph.scope.projectId}` : ""}`} download={`knowledge-graph-${locale}.json`} className="inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-[color:var(--border)] bg-[color:var(--surface-strong)] px-3 text-xs font-semibold text-[color:var(--foreground)] transition hover:bg-[color:var(--surface-hover)]">{t("knowledge.exportGraph")}</a>
+              <a href={buildGraphExportHref(locale, graph, activeUserGraph)} download={`knowledge-graph-${locale}.json`} className="inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-[color:var(--border)] bg-[color:var(--surface-strong)] px-3 text-xs font-semibold text-[color:var(--foreground)] transition hover:bg-[color:var(--surface-hover)]">{t("knowledge.exportGraph")}</a>
           </div>
 
           {/* ── Row 2: Type badges + legend — same px-5, compact ── */}

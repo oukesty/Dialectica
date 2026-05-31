@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getProject, getSettings } from "@/lib/data/repository";
+import { getLatestCrossGraphAnalysis, saveLatestCrossGraphAnalysis } from "@/lib/knowledge/cross-graph-analyses";
 import { getUserGraph } from "@/lib/knowledge/user-graphs";
 import { applyKnowledgeGraphBudget } from "@/lib/knowledge/budget";
 import { getProvider } from "@/lib/providers/registry";
@@ -312,6 +313,31 @@ function parseAnalysisList<T>(value: unknown, mapper: (item: Record<string, unkn
  * Analyze relationships between multiple user-owned knowledge graphs.
  * Finds shared concepts, conflicting viewpoints, and supporting conclusions.
  */
+export async function GET(request: Request) {
+  const settings = await getSettings();
+  const url = new URL(request.url);
+  const locale = isLocale(url.searchParams.get("locale") ?? "")
+    ? (url.searchParams.get("locale") as AppLocale)
+    : settings.locale;
+  const viewer = {
+    identityId: settings.profile.localIdentityId,
+    displayName: settings.profile.displayName,
+  };
+  const analysis = await getLatestCrossGraphAnalysis(viewer.identityId);
+  if (!analysis) {
+    return NextResponse.json({ analysis: null });
+  }
+
+  for (const graphId of analysis.sourceGraphIds) {
+    const graph = await getUserGraph(graphId, viewer, locale);
+    if (!graph || graph.status !== "ready") {
+      return NextResponse.json({ analysis: null });
+    }
+  }
+
+  return NextResponse.json({ analysis });
+}
+
 export async function POST(request: Request) {
   const settings = await getSettings();
   const rawBody = await request.json().catch(() => null);
@@ -508,5 +534,6 @@ export async function POST(request: Request) {
     createdAt: now,
   };
 
-  return NextResponse.json({ analysis });
+  const savedAnalysis = await saveLatestCrossGraphAnalysis(viewer.identityId, analysis);
+  return NextResponse.json({ analysis: savedAnalysis });
 }

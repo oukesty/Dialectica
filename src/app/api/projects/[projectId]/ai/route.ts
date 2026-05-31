@@ -6,6 +6,7 @@ import { appendSummaryHistory, evaluateAssistiveSummaryDecision, evaluateSummary
 import { appendCollaborationMessage, getCollaborationState, sanitizeCollaborationStateForClient, syncCollaborationState } from "@/lib/collaboration/store";
 import { createProviderSnapshot } from "@/lib/factories";
 import { getProject, getSettings, upsertProject } from "@/lib/data/repository";
+import { recordEmailNotificationAttempt } from "@/lib/email-notifications";
 import { getProjectAccessState } from "@/lib/project-access";
 import { appendAuditLog } from "@/lib/audit";
 import { appendNotification } from "@/lib/notifications";
@@ -385,7 +386,7 @@ export async function POST(
   const previouslyProcessedEntryCount = getSummaryProcessedEntryCount(project);
   const pendingSummaryEntries = project.entries.slice(previouslyProcessedEntryCount);
 
-  let nextInsights = project.insights;
+  const nextInsights = project.insights;
   let nextProviderSnapshot = project.providerSnapshot;
   let taskResult: ProviderTaskResult;
   let mergedSummary = project.summary;
@@ -637,25 +638,23 @@ export async function POST(
       href: `/${locale}/projects/${projectId}`,
     });
   }
-  // Check email notification settings
   if (!summarySkipped && executionSettings.emailNotifications?.enabled && executionSettings.emailNotifications?.onAiSummary) {
-    void appendNotification(executionSettings.profile.localIdentityId, {
-      type: "email_trigger",
+    void recordEmailNotificationAttempt(executionSettings.profile.localIdentityId, executionSettings, {
       title: localize(locale, {
-        "zh-CN": "本地模拟邮件通知：AI 总结",
-        en: "Local simulated email notification: AI summary",
-        ja: "ローカル模擬メール通知：AI 要約",
-        ko: "로컬 모의 이메일 알림: AI 요약",
-        fr: "Notification e-mail simulee locale : resume IA",
-        ru: "Локальное имитированное email-уведомление: сводка ИИ",
+        "zh-CN": "邮件通知未发送：AI 总结",
+        en: "Email notification not sent: AI summary",
+        ja: "メール通知は未送信：AI 要約",
+        ko: "이메일 알림 미전송: AI 요약",
+        fr: "Notification e-mail non envoyee : resume IA",
+        ru: "Email-уведомление не отправлено: сводка ИИ",
       }),
       body: localize(locale, {
-        "zh-CN": `已记录一条本地模拟通知，不会真实发送邮件到 ${executionSettings.emailNotifications.emailAddress}。AI 已完成 ${task}。`,
-        en: `A local simulated notification was recorded; no real email was sent to ${executionSettings.emailNotifications.emailAddress}. AI completed ${task}.`,
-        ja: `${executionSettings.emailNotifications.emailAddress} へ実際のメールは送信されません。ローカルの模擬通知として記録しました。AI が ${task} を完了しました。`,
-        ko: `${executionSettings.emailNotifications.emailAddress}로 실제 이메일을 보내지 않고 로컬 모의 알림만 기록했습니다. AI가 ${task} 작업을 완료했습니다.`,
-        fr: `Une notification simulee locale a ete enregistree ; aucun e-mail reel n'a ete envoye a ${executionSettings.emailNotifications.emailAddress}. L'IA a termine ${task}.`,
-        ru: `Записано локальное имитированное уведомление; реальное письмо на ${executionSettings.emailNotifications.emailAddress} не отправлялось. ИИ завершил ${task}.`,
+        "zh-CN": `AI 已完成 ${task}。当前未配置外部邮件 Provider，因此不会向 ${executionSettings.emailNotifications.emailAddress || "收件人"} 发送真实邮件。`,
+        en: `AI completed ${task}. No external email provider is configured, so no real email was sent to ${executionSettings.emailNotifications.emailAddress || "the recipient"}.`,
+        ja: `AI が ${task} を完了しました。外部メール Provider が未設定のため、${executionSettings.emailNotifications.emailAddress || "受信者"} へ実際のメールは送信されません。`,
+        ko: `AI가 ${task} 작업을 완료했습니다. 외부 이메일 Provider가 설정되어 있지 않아 ${executionSettings.emailNotifications.emailAddress || "수신자"}에게 실제 이메일은 전송되지 않았습니다.`,
+        fr: `L'IA a termine ${task}. Aucun Provider e-mail externe n'est configure ; aucun e-mail reel n'a ete envoye a ${executionSettings.emailNotifications.emailAddress || "le destinataire"}.`,
+        ru: `ИИ завершил ${task}. Внешний email-провайдер не настроен, поэтому настоящее письмо на ${executionSettings.emailNotifications.emailAddress || "адрес получателя"} не отправлялось.`,
       }),
       projectId,
     });

@@ -1,0 +1,29 @@
+# Repository and dependencies
+.git
+.next
+node_modules
+
+# Runtime data and local secrets
+data/
+uploads/
+provider-secrets/
+cache/
+.cache/
+.npm-cache/
+.tmp/
+.tools/
+
+# Local build/test artifacts
+out/
+dist/
+build/
+coverage/
+output/
+*.log
+*.tsbuildinfo
+
+# Local environment files
+.env*
+!.env.example
+!.env.sample
+!.env.template

@@ -1139,6 +1139,9 @@ export function SettingsPage({
           </div>
           <ToggleRow label={t("settings.includeAttachmentsAsEvidence")} checked={settings.knowledgePreferences.includeAttachmentsAsEvidence} onChange={(checked) => updateKnowledgePreferences({ includeAttachmentsAsEvidence: checked })} />
           <ToggleRow label={t("settings.includeUnresolvedQuestions")} checked={settings.knowledgePreferences.includeUnresolvedQuestions} onChange={(checked) => updateKnowledgePreferences({ includeUnresolvedQuestions: checked })} />
+          <ToggleRow label={t("settings.autoExtractOnSave")} checked={settings.knowledgePreferences.autoExtractOnSave} onChange={(checked) => updateKnowledgePreferences({ autoExtractOnSave: checked })} />
+          <ToggleRow label={t("settings.autoExtractAfterAiTask")} checked={settings.knowledgePreferences.autoExtractAfterAiTask} onChange={(checked) => updateKnowledgePreferences({ autoExtractAfterAiTask: checked })} />
+          <ToggleRow label={t("settings.autoGenerateGraphLinks")} checked={settings.knowledgePreferences.autoGenerateGraphLinks} onChange={(checked) => updateKnowledgePreferences({ autoGenerateGraphLinks: checked })} />
           <label className="space-y-2">
             <span className="text-sm font-medium">{t("settings.knowledgeDefaultView")}</span>
             <select className={fieldClass} value={settings.knowledgePreferences.defaultView} onChange={(event) => updateKnowledgePreferences({ defaultView: event.target.value as AppSettings["knowledgePreferences"]["defaultView"] })}>
@@ -1550,6 +1553,26 @@ export function SettingsPage({
             </select>
           </label>
           <ToggleRow label={t("settings.notificationsEnabled")} checked={settings.collaborationPreferences.notificationsEnabled ?? true} onChange={(checked) => stageSettings({ ...settings, collaborationPreferences: { ...settings.collaborationPreferences, notificationsEnabled: checked } })} />
+          <ToggleRow label={t("nav.notificationDoNotDisturb")} checked={settings.collaborationPreferences.notificationDoNotDisturb} onChange={(checked) => stageSettings({ ...settings, collaborationPreferences: { ...settings.collaborationPreferences, notificationDoNotDisturb: checked } })} />
+          <div className={helperCardClass}>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-sm font-semibold">{t("settings.emailNotifications")}</p>
+              <Badge>{t("settings.externalEmailProviderNotConfigured")}</Badge>
+            </div>
+            <p className="mt-1 text-xs leading-6 text-[color:var(--muted)]">{t("settings.emailNotificationsHint")}</p>
+            <div className="mt-4 grid gap-3">
+              <ToggleRow label={t("settings.emailEnabled")} checked={settings.emailNotifications.enabled} onChange={(checked) => stageSettings({ ...settings, emailNotifications: { ...settings.emailNotifications, enabled: checked } })} />
+              <label className="space-y-2">
+                <span className="text-sm font-medium">{t("settings.emailAddress")}</span>
+                <input className={fieldClass} value={settings.emailNotifications.emailAddress} onChange={(event) => stageSettings({ ...settings, emailNotifications: { ...settings.emailNotifications, emailAddress: event.target.value } })} placeholder="name@example.com" />
+              </label>
+              <div className="grid gap-2 sm:grid-cols-3">
+                <ToggleRow label={t("settings.onNewMember")} checked={settings.emailNotifications.onNewMember} onChange={(checked) => stageSettings({ ...settings, emailNotifications: { ...settings.emailNotifications, onNewMember: checked } })} />
+                <ToggleRow label={t("settings.onAiSummary")} checked={settings.emailNotifications.onAiSummary} onChange={(checked) => stageSettings({ ...settings, emailNotifications: { ...settings.emailNotifications, onAiSummary: checked } })} />
+                <ToggleRow label={t("settings.onRoomArchived")} checked={settings.emailNotifications.onRoomArchived} onChange={(checked) => stageSettings({ ...settings, emailNotifications: { ...settings.emailNotifications, onRoomArchived: checked } })} />
+              </div>
+            </div>
+          </div>
           <div className="space-y-3 border-t border-[color:var(--border)] pt-4">
             <div className="flex items-center justify-between">
               <p className="text-sm font-semibold">{t("settings.keyboardShortcuts")}</p>
@@ -1718,7 +1741,7 @@ export function SettingsPage({
           </div>
           <div className={helperCardClass}>
             <p className="text-xs uppercase tracking-[0.18em] text-[color:var(--muted)]">{t("settings.repository")}</p>
-            <p className="mt-2 break-all text-sm leading-6">{settings.about.repositoryUrl || t("common.none")}</p>
+            <p className="mt-2 break-all text-sm leading-6">https://github.com/oukesty/Dialectica</p>
           </div>
           <div className={helperCardClass}>
             <p className="text-xs uppercase tracking-[0.18em] text-[color:var(--muted)]">{t("settings.license")}</p>

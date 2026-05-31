@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { appendCollaborationMessage, syncCollaborationState } from "@/lib/collaboration/store";
 import { normalizeAvatarPreset, sanitizeAvatarDataUrl } from "@/lib/avatar";
 import { getProject, getSettings, getSettingsForIdentity, syncRoomFromParticipants, upsertProject } from "@/lib/data/repository";
+import { recordEmailNotificationAttempt } from "@/lib/email-notifications";
 import { createParticipantPresence } from "@/lib/factories";
 import { getProjectAccessState } from "@/lib/project-access";
 import { discussionRoomSchema } from "@/lib/schema";
@@ -197,23 +198,22 @@ export async function POST(
       href: `/${hostLocale}/projects/${projectId}`,
     });
     if (hostSettings?.emailNotifications.enabled && hostSettings.emailNotifications.onNewMember) {
-      void appendNotification(hostId, {
-        type: "email_trigger",
+      void recordEmailNotificationAttempt(hostId, hostSettings, {
         title: localize(hostLocale, {
-          "zh-CN": "本地模拟邮件通知：新成员",
-          en: "Local simulated email notification: new member",
-          ja: "ローカル模擬メール通知：新しいメンバー",
-          ko: "로컬 모의 이메일 알림: 새 구성원",
-          fr: "Notification e-mail simulee locale : nouveau membre",
-          ru: "Локальное имитированное email-уведомление: новый участник",
+          "zh-CN": "邮件通知未发送：新成员",
+          en: "Email notification not sent: new member",
+          ja: "メール通知は未送信：新しいメンバー",
+          ko: "이메일 알림 미전송: 새 구성원",
+          fr: "Notification e-mail non envoyee : nouveau membre",
+          ru: "Email-уведомление не отправлено: новый участник",
         }),
         body: localize(hostLocale, {
-          "zh-CN": `已记录一条本地模拟通知，不会真实发送邮件到 ${hostSettings.emailNotifications.emailAddress}。${participant.name} 加入了房间。`,
-          en: `A local simulated notification was recorded; no real email was sent to ${hostSettings.emailNotifications.emailAddress}. ${participant.name} joined the room.`,
-          ja: `${hostSettings.emailNotifications.emailAddress} へ実際のメールは送信されません。ローカルの模擬通知として記録しました。${participant.name} がルームに参加しました。`,
-          ko: `${hostSettings.emailNotifications.emailAddress}로 실제 이메일을 보내지 않고 로컬 모의 알림만 기록했습니다. ${participant.name}님이 방에 참여했습니다.`,
-          fr: `Une notification simulee locale a ete enregistree ; aucun e-mail reel n'a ete envoye a ${hostSettings.emailNotifications.emailAddress}. ${participant.name} a rejoint le salon.`,
-          ru: `Записано локальное имитированное уведомление; реальное письмо на ${hostSettings.emailNotifications.emailAddress} не отправлялось. ${participant.name} присоединился к комнате.`,
+          "zh-CN": `${participant.name} 加入了房间。当前未配置外部邮件 Provider，因此不会向 ${hostSettings.emailNotifications.emailAddress || "收件人"} 发送真实邮件。`,
+          en: `${participant.name} joined the room. No external email provider is configured, so no real email was sent to ${hostSettings.emailNotifications.emailAddress || "the recipient"}.`,
+          ja: `${participant.name} がルームに参加しました。外部メール Provider が未設定のため、${hostSettings.emailNotifications.emailAddress || "受信者"} へ実際のメールは送信されません。`,
+          ko: `${participant.name}님이 방에 참여했습니다. 외부 이메일 Provider가 설정되어 있지 않아 ${hostSettings.emailNotifications.emailAddress || "수신자"}에게 실제 이메일은 전송되지 않았습니다.`,
+          fr: `${participant.name} a rejoint le salon. Aucun Provider e-mail externe n'est configure ; aucun e-mail reel n'a ete envoye a ${hostSettings.emailNotifications.emailAddress || "le destinataire"}.`,
+          ru: `${participant.name} присоединился к комнате. Внешний email-провайдер не настроен, поэтому настоящее письмо на ${hostSettings.emailNotifications.emailAddress || "адрес получателя"} не отправлялось.`,
         }),
         projectId,
         href: `/${hostLocale}/projects/${projectId}`,

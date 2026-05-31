@@ -198,7 +198,6 @@ export async function POST(
     `\nPlease provide your response following the style instruction above.`,
   ].join("\n");
 
-  const roomAiConfig = project.room.aiConfig;
   const execution = await resolveRoomAiExecutionContext(project, settings);
   const executionSettings = execution.executionSettings;
   const providerId = execution.providerId;
